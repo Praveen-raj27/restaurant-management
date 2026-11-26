@@ -1,0 +1,39 @@
+{
+  "ingredients": [
+    "CHICKEN",
+    "MUTTON",
+    "PANEER",
+    "VEGAN",
+    "EGG",
+    "PRAWN",
+    "FISH",
+    "POTATO",
+    "MUSHROOM"
+  ],
+  "dishes": [
+    "BIRYANI",
+    "RICE",
+    "PULAO",
+    "FRIED RICE",
+    "NOODLES",
+    "DOSAI",
+    "DOSA",
+    "IDLI",
+    "ROTI",
+    "NAAN",
+    "CURRY",
+    "MASALA",
+    "TIKKA",
+    "KABAB"
+  ],
+  "descriptors": [
+    "BASMATI",
+    "JEERA",
+    "SAFFRON",
+    "BUTTER",
+    "SPECIAL",
+    "SPICY",
+    "VEGETABLE",
+    "GRILLED"
+  ]
+}

@@ -1,2 +1,13 @@
 # Private uploaded menu files
 storage/
+
+# Python virtual environments
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Node dependencies
+node_modules/
