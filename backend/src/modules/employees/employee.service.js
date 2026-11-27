@@ -86,43 +86,46 @@ export const getEmployees = async ({
   limit,
   search,
   role,
+  status,
 }) => {
   const skip = (page - 1) * limit;
 
-  // Always scope the query to the authenticated restaurant
- const where = {
-  restaurantId,
-  status: {
-    not: "REMOVED",
-  },
-  role: {
-    is: {
-      name: role || {
-        not: "OWNER",
-      },
+  const where = {
+    restaurantId,
+
+    status: status || {
+      not: "REMOVED",
     },
-  },
-  ...(search && {
-    user: {
+
+    role: {
       is: {
-        OR: [
-          {
-            name: {
-              contains: search,
-              mode: "insensitive",
-            },
-          },
-          {
-            email: {
-              contains: search,
-              mode: "insensitive",
-            },
-          },
-        ],
+        name: role || {
+          not: "OWNER",
+        },
       },
     },
-  }),
-};
+
+    ...(search && {
+      user: {
+        is: {
+          OR: [
+            {
+              name: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+            {
+              email: {
+                contains: search,
+                mode: "insensitive",
+              },
+            },
+          ],
+        },
+      },
+    }),
+  };
 
   const [employees, total] = await prisma.$transaction([
     prisma.restaurantMembership.findMany({

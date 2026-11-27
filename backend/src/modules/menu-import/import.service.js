@@ -83,7 +83,6 @@ export const getMenuImportById = async ({
     return menuImport;
 };
 
-
 export const saveMenuImportReview = async ({
     importId,
     restaurantId,
@@ -174,7 +173,6 @@ export const saveMenuImportReview = async ({
                         // Preserve system-generated OCR metadata.
                         return {
                             ...originalItem,
-
                             name: submittedItem.name.trim(),
                             description: submittedItem.description.trim(),
                             price: submittedItem.price,
@@ -235,7 +233,6 @@ export const saveMenuImportReview = async ({
     });
 };
 
-
 export const approveMenuImportService = async ({
     importId,
     restaurantId
@@ -246,7 +243,6 @@ export const approveMenuImportService = async ({
             restaurantId
         }
     });
-    
 
     if (!menuImport) {
         throw new Error("MENU_IMPORT_NOT_FOUND");
@@ -313,6 +309,20 @@ export const approveMenuImportService = async ({
         let createdItems = 0;
         let skippedItems = 0;
 
+        // Get the current maximum display order for this restaurant.
+        const categoryOrder = await tx.menuCategory.aggregate({
+            where: {
+                restaurantId
+            },
+            _max: {
+                displayOrder: true
+            }
+        });
+
+        // Continue after the existing categories.
+        let nextDisplayOrder =
+            (categoryOrder._max.displayOrder ?? -1) + 1;
+
         for (const page of extractedData.pages) {
             for (const category of page.categories) {
                 // Reuse an existing category for this restaurant.
@@ -333,45 +343,44 @@ export const approveMenuImportService = async ({
                         data: {
                             restaurantId,
                             name: category.name.trim(),
-                            displayOrder: createdCategories
+                            displayOrder: nextDisplayOrder
                         }
                     });
 
+                    nextDisplayOrder++;
                     createdCategories++;
                 }
 
-               
-for (const item of category.items) {
-    const existingItem = await tx.menuItem.findFirst({
-        where: {
-            restaurantId,
-            categoryId: menuCategory.id,
-            name: {
-                equals: item.name.trim(),
-                mode: "insensitive"
-            }
-        }
-    });
+                for (const item of category.items) {
+                    const existingItem = await tx.menuItem.findFirst({
+                        where: {
+                            restaurantId,
+                            categoryId: menuCategory.id,
+                            name: {
+                                equals: item.name.trim(),
+                                mode: "insensitive"
+                            }
+                        }
+                    });
 
-    if (existingItem) {
-        skippedItems++;
-        continue;
-    }
+                    if (existingItem) {
+                        skippedItems++;
+                        continue;
+                    }
 
-    await tx.menuItem.create({
-        data: {
-            restaurantId,
-            categoryId: menuCategory.id,
-            name: item.name.trim(),
-            description: item.description?.trim() || null,
-            price: item.price.toFixed(2),
-            foodType: item.foodType
-        }
-    });
+                    await tx.menuItem.create({
+                        data: {
+                            restaurantId,
+                            categoryId: menuCategory.id,
+                            name: item.name.trim(),
+                            description: item.description?.trim() || null,
+                            price: item.price.toFixed(2),
+                            foodType: item.foodType
+                        }
+                    });
 
-    createdItems++;
-}
-
+                    createdItems++;
+                }
             }
         }
 
@@ -404,7 +413,6 @@ for (const item of category.items) {
         };
     });
 };
-
 
 export const listMenuImportsService = async ({
     restaurantId,
@@ -513,7 +521,6 @@ export const listMenuImportsService = async ({
         }
     };
 };
-
 
 export const retryMenuImportService = async ({
     importId,

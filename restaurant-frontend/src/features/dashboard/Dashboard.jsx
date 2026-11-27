@@ -1,6 +1,11 @@
 
 import { useCallback, useEffect, useState } from "react";
-import { IndianRupee, ShoppingBag, Armchair, Users } from "lucide-react";
+import {
+  IndianRupee,
+  ShoppingBag,
+  Armchair,
+  Users,
+} from "lucide-react";
 
 import StatCard from "./components/StatCard";
 import RevenueChart from "./components/RevenueChart";
@@ -9,6 +14,7 @@ import TableOccupancy from "./components/TableOccupancy";
 import PopularMenuItems from "./components/PopularMenuItems";
 
 import tableService from "../tables/tableService";
+import employeeService from "../employees/employeeService";
 
 import "./Dashboard.css";
 
@@ -20,10 +26,18 @@ const tabs = [
 
 function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Table states
   const [tables, setTables] = useState([]);
   const [tablesLoading, setTablesLoading] = useState(true);
   const [tablesError, setTablesError] = useState("");
 
+  // Employee states
+  const [activeEmployees, setActiveEmployees] = useState(0);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
+  const [employeesError, setEmployeesError] = useState("");
+
+  // Fetch tables
   const fetchTables = useCallback(async () => {
     try {
       setTablesError("");
@@ -37,21 +51,50 @@ function Dashboard() {
       setTables(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       setTablesError(
-        error.response?.data?.message || "Unable to load table information."
+        error.response?.data?.message ||
+          "Unable to load table information."
       );
     } finally {
       setTablesLoading(false);
     }
   }, []);
 
+  // Fetch active employee count
+  const fetchActiveEmployees = useCallback(async () => {
+    try {
+      setEmployeesError("");
+
+      const response = await employeeService.getEmployees({
+        page: 1,
+        limit: 1,
+        status: "ACTIVE",
+      });
+
+      setActiveEmployees(response.pagination.total);
+    } catch (error) {
+      setEmployeesError(
+        error.response?.data?.message ||
+          "Unable to load employee information."
+      );
+    } finally {
+      setEmployeesLoading(false);
+    }
+  }, []);
+
+  // Initial fetch and automatic refresh
   useEffect(() => {
     fetchTables();
+    fetchActiveEmployees();
 
-    const intervalId = setInterval(fetchTables, 15000);
+    const intervalId = setInterval(() => {
+      fetchTables();
+      fetchActiveEmployees();
+    }, 15000);
 
     return () => clearInterval(intervalId);
-  }, [fetchTables]);
+  }, [fetchTables, fetchActiveEmployees]);
 
+  // Calculate table occupancy
   const occupiedCount = tables.filter(
     (table) => table.status === "OCCUPIED"
   ).length;
@@ -63,6 +106,7 @@ function Dashboard() {
       ? Math.round((occupiedCount / totalTables) * 100)
       : 0;
 
+  // Dashboard statistics
   const stats = [
     {
       title: "Today's Revenue",
@@ -94,15 +138,27 @@ function Dashboard() {
           : `${occupancyPercentage}%`,
       trend: "up",
       icon: Armchair,
-      description: tablesError ? "unable to load tables" : "current occupancy",
+      description: tablesError
+        ? "unable to load tables"
+        : "current occupancy",
     },
     {
       title: "Active Employees",
-      value: "12",
-      change: "+2",
+      value: employeesLoading
+        ? "Loading..."
+        : employeesError
+          ? "--"
+          : activeEmployees,
+      change: employeesLoading
+        ? "--"
+        : employeesError
+          ? "--"
+          : "Live",
       trend: "up",
       icon: Users,
-      description: "vs last week",
+      description: employeesError
+        ? "unable to load employees"
+        : "active team members",
     },
   ];
 
@@ -140,7 +196,9 @@ function Dashboard() {
             type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
-            className={`dashboard-tab ${activeTab === tab.id ? "active" : ""}`}
+            className={`dashboard-tab ${
+              activeTab === tab.id ? "active" : ""
+            }`}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}

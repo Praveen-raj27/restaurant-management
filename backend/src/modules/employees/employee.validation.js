@@ -38,6 +38,7 @@ export const listEmployeesSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().trim().max(100).optional(),
   role: z.string().trim().toUpperCase().optional(),
+  status: z.enum(["ACTIVE", "SUSPENDED"]).optional(),
 });
 
 export const validateCreateEmployee = (req, res, next) => {

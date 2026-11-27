@@ -44,7 +44,7 @@ export const addEmployee = async (req, res, next) => {
 
 export const listEmployees = async (req, res, next) => {
   try {
-    const { page, limit, search, role } = req.validatedQuery;
+    const { page, limit, search, role, status } = req.validatedQuery;
 
     const result = await getEmployees({
       restaurantId: req.user.restaurantId,
@@ -52,6 +52,7 @@ export const listEmployees = async (req, res, next) => {
       limit,
       search,
       role,
+      status,
     });
 
     return res.status(200).json({
