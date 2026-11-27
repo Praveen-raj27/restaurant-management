@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { Navigate, Route, Routes } from "react-router-dom";
@@ -5,10 +6,11 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import Login from "./features/auth/Login";
 import Dashboard from "./features/dashboard/Dashboard";
 import ProtectedRoute from "./components/common/ProtectedRoute";
-import Employees from './features/employees/Employees';
-import Tables from './features/tables/Tables';
+import Employees from "./features/employees/Employees";
+import Tables from "./features/tables/Tables";
 import Categories from "./features/menu/categories/Categories";
 import Items from "./features/menu/items/Items";
+import MenuImport from "./features/menu/import/MenuImport";
 
 import authService from "./features/auth/authService";
 import {
@@ -54,6 +56,7 @@ function App() {
           <Route path="/tables" element={<Tables />} />
           <Route path="/menu/categories" element={<Categories />} />
           <Route path="/menu/items" element={<Items />} />
+          <Route path="/menu/import" element={<MenuImport />} />
         </Route>
       </Route>
 

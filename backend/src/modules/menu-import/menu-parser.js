@@ -202,35 +202,46 @@ export function normalizeDescriptionWithWordninja(value) {
 
 // Parse prices and preserve the original OCR value.
 
+
 export const parsePrice = (text) => {
   if (typeof text !== "string" || !text.trim()) {
     return null;
   }
 
-  const normalized = text.trim().replace(/\s+/g, "");
+  const normalized = text
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/,/g, "");
 
   const match = normalized.match(
-    /^(₹|\$|€|£)?(\d{1,5}(?:,\d{3})*(?:\.\d{1,2})?)(\/-)?$/,
+    /^(₹|\$|€|£|Rs\.?|INR)?(\d{1,5}(?:\.\d{1,2})?)(\/-)?$/i,
   );
 
   if (!match) {
     return null;
   }
 
-  const amount = Number(match[2].replace(/,/g, ""));
+  const amount = Number(match[2]);
 
-  // Menu prices must be greater than zero.
   if (!Number.isFinite(amount) || amount <= 0) {
     return null;
   }
 
+  let currencySymbol = match[1] || null;
+
+  // Normalize Indian currency formats.
+  if (currencySymbol && /^(rs\.?|inr)$/i.test(currencySymbol)) {
+    currencySymbol = "₹";
+  }
+
   return {
-    currencySymbol: match[1] || null,
+    currencySymbol,
     amount,
     suffix: match[3] || null,
     originalText: text,
   };
 };
+
 
 
 export const detectCurrencyConsistency = (prices) => {
@@ -284,18 +295,13 @@ export const extractPricesFromColumn = (column) => {
   };
 };
 
+
 const isLikelyMenuItem = (line) => {
   if (!line?.text) return false;
 
   const text = line.text.trim();
 
-  if (!text) return false;
-
-  // Exclude long description-like sentences.
-  if (text.length > 40) return false;
-
-  // Exclude sentence-like text.
-  if (/[.!?]$/.test(text)) return false;
+  if (!text || text.length > 40) return false;
 
   // Exclude common document headings.
   const excludedHeadings = [
@@ -310,11 +316,13 @@ const isLikelyMenuItem = (line) => {
     return false;
   }
 
-  // Menu item names are generally uppercase in this OCR output.
-  if (text !== text.toUpperCase()) return false;
+  // Exclude sentence-like descriptions.
+  if (/[.!?]$/.test(text)) return false;
 
-  return true;
+  // Accept uppercase, lowercase and Title Case item names.
+  return /[a-zA-Z]/.test(text);
 };
+
 
 // Match each detected price with its nearest menu item.
 
@@ -380,51 +388,78 @@ export const matchPricesWithItems = (column, maxDistance = 10) => {
 
 
 // Detect likely category headings.
+
+
 export const detectCategoryHeadings = (column) => {
-  const matchedItemYPositions = new Set(
-    column.prices.map((price) => Math.round(price.centerY)),
+  const matchedItems = matchPricesWithItems(column);
+
+  const matchedItemLines = new Set(
+    matchedItems
+      .map((item) => item.itemLine)
+      .filter(Boolean)
   );
 
-  const categories = [];
+  const candidates = column.nonPriceLines
+    .filter((line) => !matchedItemLines.has(line))
+    .filter((line) => {
+      const text = line.text.trim();
 
-  for (const line of column.nonPriceLines) {
-    const text = line.text.trim();
-    const normalized = text.toUpperCase().replace(/\s+/g, " ");
+      if (!text || text.length > 35) return false;
+      if (!/[a-zA-Z]/.test(text)) return false;
 
-    const isMatchedItem = [...matchedItemYPositions].some(
-      (y) => Math.abs(y - Math.round(line.centerY)) <= 10,
+      // Exclude document titles.
+      if (/^(MENU|FOOD MENU|INDIAN|VEG|NON VEG)$/i.test(text)) {
+        return false;
+      }
+
+      // Exclude descriptions and footer text.
+      if (
+        /^(FLAVOURED|FLAVORED|COOKED|SERVED|MADE|WITH|COMBINATION|PULSES|LENTILS|BLACK|RED|THREE|FRESH|BOILED|PLEASE ALLOW)\b/i.test(
+          text
+        )
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .map((line) => ({
+      ...line,
+      normalizedName: line.text
+        .replace(/^[.…\s]+/, "")
+        .replace(/\s*[.]\s*/g, " ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    }));
+
+  const selectedHeadings = new Map();
+
+  for (const item of matchedItems) {
+    if (item.itemY === null) continue;
+
+    const previousHeading = candidates
+      .filter((heading) => heading.centerY < item.itemY)
+      .sort((a, b) => b.centerY - a.centerY)[0];
+
+    if (!previousHeading) continue;
+
+    selectedHeadings.set(
+      previousHeading.centerY,
+      previousHeading
     );
-
-    if (isMatchedItem) continue;
-
-    const isDescription =
-      /[.,!?]/.test(text) ||
-      /^(SPECIAL|GRILLED|FRESH|SERVED|MADE|WITH)\b/i.test(normalized);
-
-    const isPlaceholder = /^FOOD\s*NAME$/i.test(normalized);
-
-    const isDocumentTitle = ["INDIAN", "FOOD MENU"].includes(normalized);
-
-    const isUppercase = text === text.toUpperCase() && /[A-Z]/.test(text);
-
-    if (
-      isUppercase &&
-      text.length <= 30 &&
-      !isDescription &&
-      !isPlaceholder &&
-      !isDocumentTitle
-    ) {
-      categories.push({
-        name: text,
-        page: line.page,
-        centerY: line.centerY,
-        confidence: "REVIEW_REQUIRED",
-      });
-    }
   }
 
-  return categories;
+  return [...selectedHeadings.values()]
+    .sort((a, b) => a.centerY - b.centerY)
+    .map((heading) => ({
+      name: heading.normalizedName,
+      page: heading.page,
+      centerY: heading.centerY,
+      confidence: "REVIEW_REQUIRED",
+    }));
 };
+
+
 
 
 const isLikelyDescription = (text) => {
@@ -446,6 +481,7 @@ const isLikelyDescription = (text) => {
 
 // Attach description lines to the corresponding menu items.
 
+
 export const attachDescriptionsToItems = (column, matchedItems) => {
   const categories = detectCategoryHeadings(column);
 
@@ -457,7 +493,16 @@ export const attachDescriptionsToItems = (column, matchedItems) => {
     sortedItems.map((entry) => entry.itemLine).filter(Boolean),
   );
 
+  // Detect menu-wide instructions and footer text.
+  const isFooterOrInstruction = (text) => {
+    const normalized = text.trim().toLowerCase();
 
+    return (
+      /^(please|note:|notes:|terms and conditions)/i.test(normalized) ||
+      /\ballow\b.*\b(preparation|minutes?|time)\b/i.test(normalized) ||
+      /\b(minimum of|for preparation|preparation time)\b/i.test(normalized)
+    );
+  };
 
   return sortedItems.map((item, index) => {
     if (!item.itemLine || item.itemY === null) {
@@ -481,21 +526,24 @@ export const attachDescriptionsToItems = (column, matchedItems) => {
 
     const descriptionLines = column.nonPriceLines
       .filter((line) => {
+        const text = line.text.trim();
+
         const isBelowItem = line.centerY > item.itemY + 2;
         const isBeforeNextBoundary = line.centerY < boundaryY;
         const isNotAnotherItem = !itemLines.has(line);
-
-     
 
         const isNotCategory = !categories.some(
           (category) => category.centerY === line.centerY,
         );
 
+        const isNotFooter = !isFooterOrInstruction(text);
+
         return (
           isBelowItem &&
           isBeforeNextBoundary &&
           isNotAnotherItem &&
-          isNotCategory
+          isNotCategory &&
+          isNotFooter
         );
       })
       .sort((a, b) => a.centerY - b.centerY);
@@ -506,13 +554,14 @@ export const attachDescriptionsToItems = (column, matchedItems) => {
 
     return {
       ...item,
-      descriptionLines: descriptionLines.map(
-        (line) => line.text.trim(),
+      descriptionLines: descriptionLines.map((line) =>
+        line.text.trim(),
       ),
       description: originalDescription,
     };
   });
 };
+
 
 
 // Build structured categories and menu items for one column.
@@ -618,45 +667,62 @@ export const buildStructuredMenu = (column) => {
 // Combine all detected columns into a page-based menu structure.
 
 
+
 export const buildMenuFromColumns = (columns) => {
   const pages = new Map();
 
+  // Combine text and price columns belonging to the same page.
   for (const column of columns) {
     const pageNumber = Number(column.page);
 
-    const structuredMenu = buildStructuredMenu(column);
-
     if (!pages.has(pageNumber)) {
       pages.set(pageNumber, {
-        categories: [],
+        page: pageNumber,
         prices: [],
+        nonPriceLines: [],
       });
     }
 
     const pageData = pages.get(pageNumber);
 
-    pageData.categories.push(
-      ...structuredMenu.categories
-    );
-
-    pageData.prices.push(
-      ...structuredMenu.prices
-    );
+    pageData.prices.push(...(column.prices || []));
+    pageData.nonPriceLines.push(...(column.nonPriceLines || []));
   }
 
-  return {
-    pages: [...pages.entries()]
-      .sort(([a], [b]) => a - b)
-      .map(([page, pageData]) => ({
-        page,
+  const extractedPages = [...pages.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([pageNumber, pageData]) => {
+      // Maintain vertical reading order.
+      const combinedColumn = {
+        page: pageNumber,
+        centerX: 0,
 
-        currencyValidation: detectCurrencyConsistency(
-          pageData.prices
+        prices: pageData.prices.sort(
+          (a, b) => a.centerY - b.centerY
         ),
 
-        categories: pageData.categories,
-      })),
+        nonPriceLines: pageData.nonPriceLines.sort(
+          (a, b) => a.centerY - b.centerY
+        ),
+      };
 
+      // Process the complete page instead of individual columns.
+      const structuredMenu = buildStructuredMenu(combinedColumn);
+
+      
+      return {
+        page: pageNumber,
+
+        currencyValidation: detectCurrencyConsistency(
+          structuredMenu.prices
+        ),
+
+        categories: structuredMenu.categories,
+      };
+    });
+
+  return {
+    pages: extractedPages,
     reviewRequired: true,
   };
 };
