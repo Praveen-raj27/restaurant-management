@@ -1,6 +1,7 @@
 
 import { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma.js";
+import { withTransactionRetry } from "../../utils/transaction.utils.js";
 
 export const createOrder = async ({
   restaurantId,
@@ -9,207 +10,195 @@ export const createOrder = async ({
   source = "STAFF",
   data,
 }) => {
-  return prisma.$transaction(async (tx) => {
-    // 1. Verify the table belongs to this restaurant.
-    const table = await tx.restaurantTable.findFirst({
-      where: {
-        id: tableId,
-        restaurantId,
-        isActive: true,
-      },
-    });
+  return withTransactionRetry(() =>
+    prisma.$transaction(
+      async (tx) => {
+        // 1. Verify table belongs to this restaurant and is active.
+        const table = await tx.restaurantTable.findFirst({
+          where: {
+            id: tableId,
+            restaurantId,
+            isActive: true,
+          },
+        });
 
-    if (!table) {
-      throw new Error("TABLE_NOT_FOUND");
-    }
-
-    if (table.status === "RESERVED") {
-      throw new Error("TABLE_RESERVED");
-    }
-
-    // 2. Retrieve all requested menu items from the database.
-    const menuItemIds = [
-      ...new Set(data.items.map((item) => item.menuItemId)),
-    ];
-
-    const menuItems = await tx.menuItem.findMany({
-      where: {
-        id: { in: menuItemIds },
-        restaurantId,
-        isActive: true,
-        isAvailable: true,
-      },
-      include: {
-        variants: true,
-      },
-    });
-
-    const menuItemMap = new Map(
-      menuItems.map((item) => [item.id, item]),
-    );
-
-    // 3. Validate items and calculate prices using database values.
-    let subtotal = new Prisma.Decimal(0);
-
-    const orderItems = data.items.map((requestedItem) => {
-      const menuItem = menuItemMap.get(requestedItem.menuItemId);
-
-      if (!menuItem) {
-        throw new Error("MENU_ITEM_NOT_AVAILABLE");
-      }
-
-      let unitPrice;
-      let variantId = null;
-      let variantName = null;
-
-      const hasVariants = menuItem.variants.length > 0;
-
-      if (hasVariants) {
-        if (!requestedItem.variantId) {
-          throw new Error("VARIANT_REQUIRED");
+        if (!table) {
+          throw new Error("TABLE_NOT_FOUND");
         }
 
-        const variant = menuItem.variants.find(
-          (item) =>
-            item.id === requestedItem.variantId &&
-            item.isActive &&
-            item.isAvailable,
+        if (table.status === "RESERVED") {
+          throw new Error("TABLE_RESERVED");
+        }
+
+        // 2. Resolve the active session server-side.
+        const session = await tx.tableSession.findFirst({
+          where: {
+            tableId: table.id,
+            restaurantId,
+            status: "OPEN",
+          },
+          select: { id: true },
+        });
+
+        if (!session) {
+          throw new Error("ACTIVE_TABLE_SESSION_REQUIRED");
+        }
+
+        // 3. Load menu items from this restaurant.
+        const menuItemIds = [
+          ...new Set(data.items.map((item) => item.menuItemId)),
+        ];
+
+        const menuItems = await tx.menuItem.findMany({
+          where: {
+            id: { in: menuItemIds },
+            restaurantId,
+            isActive: true,
+            isAvailable: true,
+          },
+          include: {
+            variants: true,
+          },
+        });
+
+        const menuItemMap = new Map(
+          menuItems.map((item) => [item.id, item]),
         );
 
-        if (!variant) {
-          throw new Error("INVALID_OR_UNAVAILABLE_VARIANT");
-        }
+        // 4. Validate items and calculate prices from database values.
+        const orderItems = data.items.map((item) => {
+          const menuItem = menuItemMap.get(item.menuItemId);
 
-        unitPrice = new Prisma.Decimal(variant.price);
-        variantId = variant.id;
-        variantName = variant.name;
-      } else {
-        if (requestedItem.variantId) {
-          throw new Error("VARIANT_NOT_ALLOWED");
-        }
+          if (!menuItem) {
+            throw new Error("MENU_ITEM_NOT_AVAILABLE");
+          }
 
-        if (menuItem.price === null) {
-          throw new Error("MENU_ITEM_PRICE_NOT_CONFIGURED");
-        }
+          const hasVariants = menuItem.variants.length > 0;
+          let selectedVariant = null;
+          let unitPrice = Number(menuItem.price);
 
-        unitPrice = new Prisma.Decimal(menuItem.price);
-      }
+          if (hasVariants) {
+            if (!item.variantId) {
+              throw new Error("VARIANT_REQUIRED");
+            }
 
-      const quantity = requestedItem.quantity;
-      const totalPrice = unitPrice.mul(quantity);
+            selectedVariant = menuItem.variants.find(
+              (variant) =>
+                variant.id === item.variantId && variant.isActive,
+            );
 
-      subtotal = subtotal.add(totalPrice);
+            if (!selectedVariant) {
+              throw new Error("INVALID_OR_UNAVAILABLE_VARIANT");
+            }
 
-      return {
-        menuItemId: menuItem.id,
-        variantId,
-        itemName: menuItem.name,
-        variantName,
-        foodType: menuItem.foodType,
-        quantity,
-        unitPrice,
-        totalPrice,
-        notes: requestedItem.notes || null,
-      };
-    });
+            unitPrice = Number(selectedVariant.price);
+          } else if (item.variantId) {
+            throw new Error("VARIANT_NOT_ALLOWED");
+          }
 
-    // 4. Calculate the order total.
-    // Tax and discount are zero for the current MVP.
-    const taxAmount = new Prisma.Decimal(0);
-    const discountAmount = new Prisma.Decimal(0);
+          if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+            throw new Error("MENU_ITEM_PRICE_NOT_CONFIGURED");
+          }
 
-    const totalAmount = subtotal
-      .add(taxAmount)
-      .sub(discountAmount);
+          const quantity = item.quantity;
+          const totalPrice = unitPrice * quantity;
 
-    // 5. Create the order and its items.
-    const order = await tx.order.create({
-      data: {
-        restaurantId,
-        tableId,
-        createdById,
-        source,
-        status: "PLACED",
-        subtotal,
-        taxAmount,
-        discountAmount,
-        totalAmount,
-        currency: "INR",
-        notes: data.notes || null,
-        items: {
-          create: orderItems,
-        },
-      },
-      include: {
-        items: true,
-        table: {
-          select: {
-            id: true,
-            tableNumber: true,
-            name: true,
+          return {
+            menuItemId: menuItem.id,
+            variantId: selectedVariant?.id || null,
+            itemName: menuItem.name,
+            variantName: selectedVariant?.name || null,
+            quantity,
+            unitPrice,
+            totalPrice,
+            notes: item.notes || null,
+          };
+        });
+
+        // 5. Calculate totals.
+        const subtotal = orderItems.reduce(
+          (sum, item) => sum + item.totalPrice,
+          0,
+        );
+
+        const taxAmount = 0;
+        const discountAmount = 0;
+        const totalAmount = subtotal + taxAmount - discountAmount;
+
+        // 6. Create order linked to the active table session.
+        const order = await tx.order.create({
+          data: {
+            restaurantId,
+            tableId,
+            sessionId: session.id,
+            createdById,
+            source,
+            status: "PLACED",
+            subtotal,
+            taxAmount,
+            discountAmount,
+            totalAmount,
+            currency: "INR",
+            notes: data.notes || null,
+            items: {
+              create: orderItems,
+            },
           },
-        },
-      },
-    });
+          include: {
+            items: true,
+            table: {
+              select: {
+                id: true,
+                tableNumber: true,
+                name: true,
+              },
+            },
+          },
+        });
 
-    // 6. Mark the table as occupied.
-    await tx.restaurantTable.update({
-      where: {
-        id: table.id,
-      },
-      data: {
-        status: "OCCUPIED",
-      },
-    });
+        // 7. Ensure the table remains occupied.
+        await tx.restaurantTable.update({
+          where: { id: table.id },
+          data: { status: "OCCUPIED" },
+        });
 
-    return order;
-  });
+        return order;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    ),
+  );
 };
-
-
 
 export const markOrderAsServed = async ({
   restaurantId,
   orderId,
 }) => {
   return prisma.$transaction(async (tx) => {
-    const result = await tx.order.updateMany({
+    const order = await tx.order.findFirst({
       where: {
         id: orderId,
         restaurantId,
-        status: "READY",
       },
+    });
+
+    if (!order) {
+      throw new Error("ORDER_NOT_FOUND");
+    }
+
+    if (order.status !== "READY") {
+      throw new Error("ORDER_NOT_READY");
+    }
+
+    return tx.order.update({
+      where: { id: order.id },
       data: {
         status: "SERVED",
         servedAt: new Date(),
       },
-    });
-
-    if (result.count === 0) {
-      const order = await tx.order.findFirst({
-        where: {
-          id: orderId,
-          restaurantId,
-        },
-        select: {
-          id: true,
-          status: true,
-        },
-      });
-
-      if (!order) {
-        throw new Error("ORDER_NOT_FOUND");
-      }
-
-      throw new Error("ORDER_NOT_READY");
-    }
-
-    return tx.order.findFirst({
-      where: {
-        id: orderId,
-        restaurantId,
-      },
       include: {
+        items: true,
         table: {
           select: {
             id: true,
@@ -217,7 +206,6 @@ export const markOrderAsServed = async ({
             name: true,
           },
         },
-        items: true,
       },
     });
   });

@@ -53,6 +53,11 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum TableSessionStatus {
+  OPEN
+  CLOSED
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   name         String
@@ -63,9 +68,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships   RestaurantMembership[]
-  refreshTokens RefreshToken[]
-  ordersCreated Order[]                @relation("OrderCreatedBy")
+  memberships    RestaurantMembership[]
+  refreshTokens  RefreshToken[]
+  sessionsOpened TableSession[]         @relation("SessionOpenedBy")
+  sessionsClosed TableSession[]         @relation("SessionClosedBy")
+  ordersCreated  Order[]                @relation("OrderCreatedBy")
 }
 
 model Restaurant {
@@ -88,6 +95,7 @@ model Restaurant {
   menuItems      MenuItem[]
   menuImports    MenuImport[]
   orders         Order[]
+  tableSessions  TableSession[]
 }
 
 model Role {
@@ -169,7 +177,8 @@ model RestaurantTable {
 
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
-  orders Order[]
+  orders   Order[]
+  sessions TableSession[]
 
   @@index([restaurantId, status])
 }
@@ -299,7 +308,9 @@ model Order {
   table      RestaurantTable @relation(fields: [tableId], references: [id], onDelete: Restrict)
   createdBy  User?           @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
-  items OrderItem[]
+  items     OrderItem[]
+  sessionId String?       @db.Uuid
+  session   TableSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([restaurantId, status, createdAt])
   @@index([tableId, createdAt])
@@ -333,4 +344,34 @@ model OrderItem {
   @@index([orderId])
   @@index([menuItemId])
   @@index([variantId])
+}
+
+model TableSession {
+  id           String @id @default(uuid()) @db.Uuid
+  restaurantId String @db.Uuid
+  tableId      String @db.Uuid
+
+  openedById String? @db.Uuid
+  closedById String? @db.Uuid
+
+  status TableSessionStatus @default(OPEN)
+
+  openedAt DateTime  @default(now())
+  closedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurant Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table      RestaurantTable @relation(fields: [tableId], references: [id], onDelete: Restrict)
+
+  openedBy User? @relation("SessionOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
+  closedBy User? @relation("SessionClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  orders Order[]
+
+  @@index([restaurantId, status])
+  @@index([tableId, status])
+  @@index([openedById])
+  @@index([closedById])
 }

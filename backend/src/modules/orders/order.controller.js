@@ -1,5 +1,8 @@
 
-import { createOrder, markOrderAsServed } from "./order.service.js";
+import {
+  createOrder,
+  markOrderAsServed,
+} from "./order.service.js";
 
 export const addOrder = async (req, res, next) => {
   try {
@@ -17,29 +20,47 @@ export const addOrder = async (req, res, next) => {
       data: order,
     });
   } catch (error) {
-    const statusCodes = {
-      TABLE_NOT_FOUND: 404,
-      TABLE_RESERVED: 409,
-      MENU_ITEM_NOT_AVAILABLE: 400,
-      VARIANT_REQUIRED: 400,
-      INVALID_OR_UNAVAILABLE_VARIANT: 400,
-      VARIANT_NOT_ALLOWED: 400,
-      MENU_ITEM_PRICE_NOT_CONFIGURED: 400,
+    const errors = {
+      TABLE_NOT_FOUND: [404, "Table not found"],
+      TABLE_RESERVED: [409, "Table is reserved"],
+      ACTIVE_TABLE_SESSION_REQUIRED: [
+        409,
+        "Open a table session before creating an order",
+      ],
+      MENU_ITEM_NOT_AVAILABLE: [
+        400,
+        "One or more menu items are unavailable",
+      ],
+      VARIANT_REQUIRED: [
+        400,
+        "Please select a menu item variant",
+      ],
+      INVALID_OR_UNAVAILABLE_VARIANT: [
+        400,
+        "Selected variant is invalid or unavailable",
+      ],
+      VARIANT_NOT_ALLOWED: [
+        400,
+        "This menu item does not support variants",
+      ],
+      MENU_ITEM_PRICE_NOT_CONFIGURED: [
+        400,
+        "Menu item price is not configured",
+      ],
     };
 
-    const statusCode = statusCodes[error.message];
+    const result = errors[error.message];
 
-    if (statusCode) {
-      return res.status(statusCode).json({
+    if (result) {
+      return res.status(result[0]).json({
         success: false,
-        message: error.message,
+        message: result[1],
       });
     }
 
-    next(error);
+    return next(error);
   }
 };
-
 
 export const serveOrder = async (req, res, next) => {
   try {
@@ -54,20 +75,23 @@ export const serveOrder = async (req, res, next) => {
       data: order,
     });
   } catch (error) {
-    const statusCodes = {
-      ORDER_NOT_FOUND: 404,
-      ORDER_NOT_READY: 409,
+    const errors = {
+      ORDER_NOT_FOUND: [404, "Order not found"],
+      ORDER_NOT_READY: [
+        409,
+        "Only READY orders can be marked as served",
+      ],
     };
 
-    const statusCode = statusCodes[error.message];
+    const result = errors[error.message];
 
-    if (statusCode) {
-      return res.status(statusCode).json({
+    if (result) {
+      return res.status(result[0]).json({
         success: false,
-        message: error.message,
+        message: result[1],
       });
     }
 
-    next(error);
+    return next(error);
   }
 };

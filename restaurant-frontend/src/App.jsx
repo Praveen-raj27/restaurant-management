@@ -13,6 +13,7 @@ import Categories from "./features/menu/categories/Categories";
 import Items from "./features/menu/items/Items";
 import MenuImport from "./features/menu/import/MenuImport";
 import Kitchen from "./features/kitchen/Kitchen";
+import GuestMenu from "./features/guest/GuestMenu";
 
 import authService from "./features/auth/authService";
 
@@ -57,7 +58,7 @@ function App() {
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-
+      <Route path="/menu" element={<GuestMenu />} />
       {/* Authentication protection */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>

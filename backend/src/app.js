@@ -13,14 +13,28 @@ import itemRoutes from "./modules/menu/items/item.routes.js";
 import menuImportRoutes from "./modules/menu-import/import.routes.js";
 import orderRoutes from "./modules/orders/order.routes.js";
 import kitchenRoutes from "./modules/kitchen/kitchen.routes.js";
+import tableSessionRoutes from "./modules/table-sessions/table-session.routes.js";
 
 const app = express();
 
 app.use(helmet());
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true,
-}));
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://192.168.1.24:5173",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -53,5 +67,6 @@ app.use("/api/v1/menu/items", itemRoutes);
 app.use("/api/v1/menu/imports", menuImportRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/kitchen", kitchenRoutes);
+app.use("/api/v1/table-sessions", tableSessionRoutes);
 
 export default app;

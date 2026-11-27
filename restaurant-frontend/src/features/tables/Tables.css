@@ -515,3 +515,110 @@
   font-size: 13px;
   line-height: 1.5;
 }
+/* Table action layout */
+.table-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Session buttons */
+.table-actions .session-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.table-actions .session-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Open session */
+.table-actions .open-session-button {
+  color: #e9b96e;
+  background: rgba(233, 185, 110, 0.10);
+  border: 1px solid rgba(233, 185, 110, 0.4);
+}
+
+.table-actions .open-session-button:hover {
+  background: rgba(233, 185, 110, 0.2);
+  border-color: #e9b96e;
+}
+
+/* Close session */
+.table-actions .close-session-button {
+  color: #e7a0a0;
+  background: rgba(220, 90, 90, 0.08);
+  border: 1px solid rgba(220, 90, 90, 0.35);
+}
+
+.table-actions .close-session-button:hover {
+  background: rgba(220, 90, 90, 0.16);
+  border-color: #dc7777;
+}
+
+/* Tablet and mobile */
+@media (max-width: 768px) {
+  .table-actions {
+    gap: 6px;
+  }
+
+  .table-actions .session-button {
+    min-height: 32px;
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+}
+
+.table-qr-image {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+  margin: 16px 0;
+  background: #ffffff;
+  border-radius: 12px;
+}
+
+.table-qr-image svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.table-qr-token > p {
+  text-align: center;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.table-qr-warning {
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid #e9b96e;
+  border-radius: 8px;
+  background: rgba(233, 185, 110, 0.12);
+}
+
+.table-qr-warning strong {
+  color: var(--color-midnight, #25352f);
+}
+
+.table-qr-warning p {
+  margin: 6px 0 0;
+  color: var(--color-text, #555);
+  font-size: 13px;
+  line-height: 1.5;
+}

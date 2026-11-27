@@ -1,5 +1,9 @@
+
 import { Router } from "express";
-import { validateQrCode } from "./public.controller.js";
+import {
+  validateQrCode,
+  getPublicMenu,
+} from "./public.controller.js";
 import { validateQrRequest } from "./public.validation.js";
 
 const router = Router();
@@ -9,6 +13,13 @@ router.post(
   "/tables/validate-qr",
   validateQrRequest,
   validateQrCode
+);
+
+// Public menu retrieval using table QR token
+router.post(
+  "/tables/menu",
+  validateQrRequest,
+  getPublicMenu
 );
 
 export default router;
