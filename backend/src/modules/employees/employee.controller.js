@@ -1,13 +1,17 @@
 
-import { createEmployee, getEmployees, updateEmployee, removeEmployee } from "./employee.service.js";
+import {
+  createEmployee,
+  getEmployees,
+  updateEmployee,
+  removeEmployee,
+} from "./employee.service.js";
 
 export const addEmployee = async (req, res, next) => {
   try {
     const employee = await createEmployee({
       ...req.body,
-
-      // Always derive tenant from authenticated context
       restaurantId: req.user.restaurantId,
+      actorRole: req.user.role,
     });
 
     return res.status(201).json({
@@ -30,6 +34,13 @@ export const addEmployee = async (req, res, next) => {
       });
     }
 
+    if (error.message === "MANAGER_ROLE_ASSIGNMENT_FORBIDDEN") {
+      return res.status(403).json({
+        success: false,
+        message: "Only OWNER can assign the MANAGER role",
+      });
+    }
+
     if (error.message === "EMAIL_ALREADY_EXISTS") {
       return res.status(409).json({
         success: false,
@@ -40,7 +51,6 @@ export const addEmployee = async (req, res, next) => {
     next(error);
   }
 };
-
 
 export const listEmployees = async (req, res, next) => {
   try {
@@ -71,6 +81,8 @@ export const editEmployee = async (req, res, next) => {
     const employee = await updateEmployee({
       employeeId: req.params.id,
       restaurantId: req.user.restaurantId,
+      actorId: req.user.id,
+      actorRole: req.user.role,
       updates: req.validatedBody,
     });
 
@@ -101,6 +113,17 @@ export const editEmployee = async (req, res, next) => {
       });
     }
 
+    if (
+      error.message === "SELF_MANAGEMENT_NOT_ALLOWED" ||
+      error.message === "FORBIDDEN_EMPLOYEE_MANAGEMENT" ||
+      error.message === "MANAGER_ROLE_ASSIGNMENT_FORBIDDEN"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to perform this employee management action",
+      });
+    }
+
     next(error);
   }
 };
@@ -110,6 +133,8 @@ export const deleteEmployee = async (req, res, next) => {
     const employee = await removeEmployee({
       employeeId: req.params.id,
       restaurantId: req.user.restaurantId,
+      actorId: req.user.id,
+      actorRole: req.user.role,
     });
 
     return res.status(200).json({
@@ -122,6 +147,16 @@ export const deleteEmployee = async (req, res, next) => {
       return res.status(404).json({
         success: false,
         message: "Employee not found",
+      });
+    }
+
+    if (
+      error.message === "SELF_MANAGEMENT_NOT_ALLOWED" ||
+      error.message === "FORBIDDEN_EMPLOYEE_MANAGEMENT"
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You do not have permission to perform this employee management action",
       });
     }
 

@@ -9,8 +9,8 @@ export const createEmployee = async ({
   password,
   roleName,
   restaurantId,
+  actorRole,
 }) => {
-  // 1. Validate the requested role belongs to this restaurant
   const role = await prisma.role.findUnique({
     where: {
       restaurantId_name: {
@@ -24,15 +24,17 @@ export const createEmployee = async ({
     throw new Error("ROLE_NOT_FOUND");
   }
 
-  // 2. Prevent assigning OWNER role
   if (role.name === "OWNER") {
     throw new Error("OWNER_ROLE_NOT_ALLOWED");
   }
 
-  // 3. Hash employee password
+  // Only OWNER can assign the MANAGER role.
+  if (role.name === "MANAGER" && actorRole !== "OWNER") {
+    throw new Error("MANAGER_ROLE_ASSIGNMENT_FORBIDDEN");
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
 
-  // 4. Create user and restaurant membership atomically
   try {
     const employee = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -79,7 +81,6 @@ export const createEmployee = async ({
   }
 };
 
-
 export const getEmployees = async ({
   restaurantId,
   page,
@@ -92,11 +93,9 @@ export const getEmployees = async ({
 
   const where = {
     restaurantId,
-
     status: status || {
       not: "REMOVED",
     },
-
     role: {
       is: {
         name: role || {
@@ -104,7 +103,6 @@ export const getEmployees = async ({
         },
       },
     },
-
     ...(search && {
       user: {
         is: {
@@ -155,7 +153,6 @@ export const getEmployees = async ({
         },
       },
     }),
-
     prisma.restaurantMembership.count({ where }),
   ]);
 
@@ -173,9 +170,10 @@ export const getEmployees = async ({
 export const updateEmployee = async ({
   employeeId,
   restaurantId,
+  actorId,
+  actorRole,
   updates,
 }) => {
-  // Find employee within the current restaurant
   const membership = await prisma.restaurantMembership.findFirst({
     where: {
       id: employeeId,
@@ -199,7 +197,27 @@ export const updateEmployee = async ({
     throw new Error("EMPLOYEE_NOT_FOUND");
   }
 
-  // Prepare user profile updates
+  // Prevent users from modifying their own membership.
+  if (membership.userId === actorId) {
+    throw new Error("SELF_MANAGEMENT_NOT_ALLOWED");
+  }
+
+  // MANAGER cannot manage another MANAGER.
+  if (
+    actorRole === "MANAGER" &&
+    membership.role.name === "MANAGER"
+  ) {
+    throw new Error("FORBIDDEN_EMPLOYEE_MANAGEMENT");
+  }
+
+  // Only OWNER can promote an employee to MANAGER.
+  if (
+    updates.roleName === "MANAGER" &&
+    actorRole !== "OWNER"
+  ) {
+    throw new Error("MANAGER_ROLE_ASSIGNMENT_FORBIDDEN");
+  }
+
   const userUpdates = {};
 
   if (updates.name !== undefined) {
@@ -214,7 +232,6 @@ export const updateEmployee = async ({
     userUpdates.phone = updates.phone;
   }
 
-  // Prepare membership updates
   const membershipUpdates = {};
 
   if (updates.status !== undefined) {
@@ -293,6 +310,8 @@ export const updateEmployee = async ({
 export const removeEmployee = async ({
   employeeId,
   restaurantId,
+  actorId,
+  actorRole,
 }) => {
   const membership = await prisma.restaurantMembership.findFirst({
     where: {
@@ -307,10 +326,26 @@ export const removeEmployee = async ({
         },
       },
     },
+    include: {
+      role: true,
+    },
   });
 
   if (!membership) {
     throw new Error("EMPLOYEE_NOT_FOUND");
+  }
+
+  // Prevent users from removing their own membership.
+  if (membership.userId === actorId) {
+    throw new Error("SELF_MANAGEMENT_NOT_ALLOWED");
+  }
+
+  // MANAGER cannot remove another MANAGER.
+  if (
+    actorRole === "MANAGER" &&
+    membership.role.name === "MANAGER"
+  ) {
+    throw new Error("FORBIDDEN_EMPLOYEE_MANAGEMENT");
   }
 
   await prisma.restaurantMembership.update({

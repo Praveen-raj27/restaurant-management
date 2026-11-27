@@ -174,12 +174,20 @@ export const registerOwner = async ({
 
     // 7. Create owner membership
     const membership = await tx.restaurantMembership.create({
-      data: {
-        userId: user.id,
-        restaurantId: restaurant.id,
-        roleId: createdRoles.OWNER,
+  data: {
+    userId: user.id,
+    restaurantId: restaurant.id,
+    roleId: createdRoles.OWNER,
+  },
+  include: {
+    role: {
+      select: {
+        id: true,
+        name: true,
       },
-    });
+    },
+  },
+});
 
     // 8. Generate access token
     const accessToken = generateAccessToken({
@@ -220,10 +228,13 @@ export const registerOwner = async ({
         slug: restaurant.slug,
       },
       membership: {
-        id: membership.id,
-        status: membership.status,
-        roleId: membership.roleId,
-      },
+  id: membership.id,
+  status: membership.status,
+  role: {
+    id: membership.role.id,
+    name: membership.role.name,
+  },
+},
       accessToken,
       refreshToken,
     };
@@ -329,10 +340,13 @@ export const loginUser = async ({ email, password }) => {
       slug: membership.restaurant.slug,
     },
     membership: {
-      id: membership.id,
-      status: membership.status,
-      role: membership.role.name,
-    },
+  id: membership.id,
+  status: membership.status,
+  role: {
+    id: membership.role.id,
+    name: membership.role.name,
+  },
+},
     accessToken,
     refreshToken,
   };
@@ -492,10 +506,13 @@ export const refreshUserSession = async (rawRefreshToken) => {
           slug: membership.restaurant.slug,
         },
         membership: {
-          id: membership.id,
-          status: membership.status,
-          role: membership.role.name,
-        },
+  id: membership.id,
+  status: membership.status,
+  role: {
+    id: membership.role.id,
+    name: membership.role.name,
+  },
+},
         accessToken,
         refreshToken: newRefreshToken,
       };

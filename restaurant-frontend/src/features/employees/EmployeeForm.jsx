@@ -180,9 +180,9 @@ function EmployeeForm({
           )}
 
           {error && (
-            <p className="employee-form-error">
+            <div className="employee-form-error">
               {error}
-            </p>
+            </div>
           )}
 
           <div className="employee-form-actions">

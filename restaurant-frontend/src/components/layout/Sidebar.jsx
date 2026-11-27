@@ -1,6 +1,6 @@
 
-import { NavLink } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { NavLink } from "react-router-dom";
+import { useSelector } from "react-redux";
 import {
   LayoutDashboard,
   Users,
@@ -10,77 +10,93 @@ import {
   FileUp,
   Settings,
   X,
-} from 'lucide-react';
+  ChefHat
+} from "lucide-react";
 
 const navigation = [
   {
-    label: 'OVERVIEW',
+    label: "OVERVIEW",
     items: [
       {
-        name: 'Dashboard',
-        path: '/dashboard',
+        name: "Dashboard",
+        path: "/dashboard",
         icon: LayoutDashboard,
+        roles: ["OWNER", "MANAGER", "KITCHEN_STAFF", "WAITER", "CASHIER"],
       },
     ],
   },
   {
-    label: 'MANAGEMENT',
+    label: "MANAGEMENT",
     items: [
       {
-        name: 'Employees',
-        path: '/employees',
+        name: "Employees",
+        path: "/employees",
         icon: Users,
-        roles: ['OWNER', 'MANAGER'],
+        roles: ["OWNER", "MANAGER"],
       },
       {
-        name: 'Tables',
-        path: '/tables',
+        name: "Tables",
+        path: "/tables",
         icon: Armchair,
-        roles: ['OWNER', 'MANAGER', 'WAITER'],
+        roles: ["OWNER", "MANAGER", "WAITER"],
       },
     ],
   },
   {
-    label: 'MENU MANAGEMENT',
+    label: "MENU MANAGEMENT",
     items: [
       {
-        name: 'Categories',
-        path: '/menu/categories',
+        name: "Categories",
+        path: "/menu/categories",
         icon: Tags,
-        roles: ['OWNER', 'MANAGER'],
+        roles: ["OWNER", "MANAGER"],
       },
       {
-        name: 'Menu Items',
-        path: '/menu/items',
+        name: "Menu Items",
+        path: "/menu/items",
         icon: Utensils,
-        roles: ['OWNER', 'MANAGER'],
+        roles: ["OWNER", "MANAGER"],
       },
       {
-        name: 'Import Menu',
-        path: '/menu/import',
+        name: "Import Menu",
+        path: "/menu/import",
         icon: FileUp,
-        roles: ['OWNER', 'MANAGER'],
+        roles: ["OWNER", "MANAGER"],
       },
     ],
   },
   {
-    label: 'PREFERENCES',
+  label: "KITCHEN OPERATIONS",
+  items: [
+    {
+      name: "Kitchen Display",
+      path: "/kitchen",
+      icon: ChefHat,
+      roles: ["OWNER", "MANAGER", "KITCHEN_STAFF"],
+    },
+  ],
+},
+  {
+    label: "PREFERENCES",
     items: [
       {
-        name: 'Settings',
-        path: '/settings',
+        name: "Settings",
+        path: "/settings",
         icon: Settings,
-        roles: ['OWNER'],
+        roles: ["OWNER"],
       },
     ],
   },
 ];
 
 function Sidebar({ isOpen, onClose }) {
-  const role = useSelector((state) => state.auth.membership?.role);
+  const membership = useSelector((state) => state.auth.membership);
+
+  // Extract role name from the membership response.
+  const role = membership?.role?.name;
 
   return (
-    <aside className={`sidebar ${isOpen ? 'sidebar-open' : ''}`}>
+    <aside className={`sidebar ${isOpen ? "sidebar-open" : ""}`}>
       <div className="brand">
         <div className="brand-icon">R</div>
 
@@ -100,8 +116,8 @@ function Sidebar({ isOpen, onClose }) {
 
       <nav className="sidebar-navigation">
         {navigation.map((section) => {
-          const visibleItems = section.items.filter(
-            (item) => !item.roles || item.roles.includes(role)
+          const visibleItems = section.items.filter((item) =>
+            item.roles.includes(role)
           );
 
           if (visibleItems.length === 0) return null;
@@ -120,7 +136,7 @@ function Sidebar({ isOpen, onClose }) {
                     end
                     onClick={onClose}
                     className={({ isActive }) =>
-                      `nav-link ${isActive ? 'active' : ''}`
+                      `nav-link ${isActive ? "active" : ""}`
                     }
                   >
                     <Icon size={18} strokeWidth={1.8} />

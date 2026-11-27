@@ -1,18 +1,21 @@
-
 import { useEffect } from "react";
 import { useDispatch } from "react-redux";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import Login from "./features/auth/Login";
+import Register from "./features/auth/Register";
 import Dashboard from "./features/dashboard/Dashboard";
+
 import ProtectedRoute from "./components/common/ProtectedRoute";
 import Employees from "./features/employees/Employees";
 import Tables from "./features/tables/Tables";
 import Categories from "./features/menu/categories/Categories";
 import Items from "./features/menu/items/Items";
 import MenuImport from "./features/menu/import/MenuImport";
+import Kitchen from "./features/kitchen/Kitchen";
 
 import authService from "./features/auth/authService";
+
 import {
   setCredentials,
   clearCredentials,
@@ -21,8 +24,14 @@ import {
 
 import AppLayout from "./components/layout/AppLayout";
 
-// Prevent duplicate refresh calls during React StrictMode development checks
+// Prevent duplicate refresh calls during React StrictMode checks
 let sessionInitializationPromise = null;
+
+const MANAGEMENT_ROLES = ["OWNER", "MANAGER"];
+
+const TABLE_ROLES = ["OWNER", "MANAGER", "WAITER"];
+
+const KITCHEN_ROLES = ["OWNER", "MANAGER", "KITCHEN_STAFF"];
 
 function App() {
   const dispatch = useDispatch();
@@ -47,16 +56,34 @@ function App() {
     <Routes>
       {/* Public routes */}
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
 
-      {/* Protected routes */}
+      {/* Authentication protection */}
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
+          {/* All authenticated roles */}
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/employees" element={<Employees />} />
-          <Route path="/tables" element={<Tables />} />
-          <Route path="/menu/categories" element={<Categories />} />
-          <Route path="/menu/items" element={<Items />} />
-          <Route path="/menu/import" element={<MenuImport />} />
+
+          {/* OWNER and MANAGER only */}
+          <Route element={<ProtectedRoute allowedRoles={MANAGEMENT_ROLES} />}>
+            <Route path="/employees" element={<Employees />} />
+
+            <Route path="/menu/categories" element={<Categories />} />
+
+            <Route path="/menu/items" element={<Items />} />
+
+            <Route path="/menu/import" element={<MenuImport />} />
+          </Route>
+
+          {/* OWNER, MANAGER and WAITER */}
+          <Route element={<ProtectedRoute allowedRoles={TABLE_ROLES} />}>
+            <Route path="/tables" element={<Tables />} />
+          </Route>
+
+          {/* OWNER, MANAGER and KITCHEN_STAFF */}
+          <Route element={<ProtectedRoute allowedRoles={KITCHEN_ROLES} />}>
+            <Route path="/kitchen" element={<Kitchen />} />
+          </Route>
         </Route>
       </Route>
 

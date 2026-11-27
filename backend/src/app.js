@@ -11,6 +11,8 @@ import publicRoutes from "./modules/public/public.routes.js";
 import categoryRoutes from "./modules/menu/categories/category.routes.js";
 import itemRoutes from "./modules/menu/items/item.routes.js";
 import menuImportRoutes from "./modules/menu-import/import.routes.js";
+import orderRoutes from "./modules/orders/order.routes.js";
+import kitchenRoutes from "./modules/kitchen/kitchen.routes.js";
 
 const app = express();
 
@@ -49,5 +51,7 @@ app.use("/api/v1/public", publicRoutes);
 app.use("/api/v1/menu/categories", categoryRoutes);
 app.use("/api/v1/menu/items", itemRoutes);
 app.use("/api/v1/menu/imports", menuImportRoutes);
+app.use("/api/v1/orders", orderRoutes);
+app.use("/api/v1/kitchen", kitchenRoutes);
 
 export default app;
