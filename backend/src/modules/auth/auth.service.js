@@ -23,6 +23,7 @@ const roles = [
       "employees.manage",
       "tables.view",
       "tables.manage",
+      "tables.status.update",
       "menu.view",
       "menu.manage",
       "orders.view",
@@ -53,6 +54,7 @@ const roles = [
     permissions: [
       "dashboard.view",
       "tables.view",
+      "tables.status.update",
       "orders.view",
       "orders.create",
       "orders.update_status",

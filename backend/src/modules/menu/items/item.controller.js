@@ -71,6 +71,7 @@ export const getMenuItem = async (req, res, next) => {
 };
 
 
+
 export const editMenuItem = async (req, res, next) => {
     try {
         const menuItem = await updateMenuItem({
@@ -99,7 +100,10 @@ export const editMenuItem = async (req, res, next) => {
             });
         }
 
-        if (error.message === "VARIANT_ITEM_PRICE_NOT_ALLOWED") {
+        if (
+            error.message === "VARIANT_ITEM_PRICE_NOT_ALLOWED" ||
+            error.message === "VARIANTS_AND_BASE_PRICE_NOT_ALLOWED"
+        ) {
             return res.status(400).json({
                 success: false,
                 message: "Variant-based items cannot have a base price"
@@ -113,9 +117,28 @@ export const editMenuItem = async (req, res, next) => {
             });
         }
 
+        if (error.message === "DUPLICATE_VARIANT_NAME") {
+            return res.status(409).json({
+                success: false,
+                message: "Variant names must be unique within a menu item"
+            });
+        }
+
+        if (
+            error.message === "INVALID_VARIANT_ID" ||
+            error.message === "DUPLICATE_VARIANT_ID"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or duplicate variant reference"
+            });
+        }
+
         next(error);
     }
 };
+
+
 
 
 export const removeMenuItem = async (req, res, next) => {
@@ -127,17 +150,25 @@ export const removeMenuItem = async (req, res, next) => {
 
         return res.status(200).json({
             success: true,
-            message: "Menu item deactivated successfully",
+            message: "Menu item permanently deleted successfully",
             data: menuItem
         });
     } catch (error) {
         if (error.message === "MENU_ITEM_NOT_FOUND") {
             return res.status(404).json({
                 success: false,
-                message: "Menu item not found or already inactive"
+                message: "Menu item not found"
+            });
+        }
+
+        if (error.message === "MENU_ITEM_MUST_BE_INACTIVE") {
+            return res.status(409).json({
+                success: false,
+                message: "Please deactivate the menu item before permanently deleting it"
             });
         }
 
         next(error);
     }
 };
+

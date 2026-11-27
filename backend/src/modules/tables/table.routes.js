@@ -1,6 +1,19 @@
 import { Router } from "express";
-import { createTable, listTables, getTable, editTable, removeTable, regenerateTableQr } from "./table.controller.js";
-import { validateCreateTable, validateListTables, validateUpdateTable } from "./table.validation.js";
+import {
+  createTable,
+  listTables,
+  getTable,
+  editTable,
+  removeTable,
+  regenerateTableQr,
+  updateTableStatus,
+} from "./table.controller.js";
+import {
+  validateCreateTable,
+  validateListTables,
+  validateUpdateTable,
+  validateUpdateTableStatus,
+} from "./table.validation.js";
 import { authenticate, authorize } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
@@ -11,7 +24,7 @@ router.post(
   authenticate,
   authorize("tables.manage"),
   validateCreateTable,
-  createTable
+  createTable,
 );
 
 router.get(
@@ -19,14 +32,18 @@ router.get(
   authenticate,
   authorize("tables.view"),
   validateListTables,
-  listTables
+  listTables,
 );
 
-router.get(
-  "/:id",
+router.get("/:id", authenticate, authorize("tables.view"), getTable);
+
+// Update table operational status
+router.patch(
+  "/:id/status",
   authenticate,
-  authorize("tables.view"),
-  getTable
+  authorize("tables.status.update"),
+  validateUpdateTableStatus,
+  updateTableStatus,
 );
 
 // Update a table
@@ -35,23 +52,18 @@ router.patch(
   authenticate,
   authorize("tables.manage"),
   validateUpdateTable,
-  editTable
+  editTable,
 );
 
 // Soft delete (deactivate) a table
-router.delete(
-  "/:id",
-  authenticate,
-  authorize("tables.manage"),
-  removeTable
-);
+router.delete("/:id", authenticate, authorize("tables.manage"), removeTable);
 
 // Regenerate table QR token
 router.post(
   "/:id/qr/regenerate",
   authenticate,
   authorize("tables.manage"),
-  regenerateTableQr
+  regenerateTableQr,
 );
 
 export default router;

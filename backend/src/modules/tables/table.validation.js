@@ -64,18 +64,16 @@ const updateTableSchema = z.object({
     .min(1)
     .max(50)
     .optional(),
-
-  status: z.enum([
-    "AVAILABLE",
-    "OCCUPIED",
-    "RESERVED",
-  ]).optional(),
-
-  isActive: z.boolean().optional(),
 }).refine((data) => Object.keys(data).length > 0, {
   message: "At least one field must be provided",
 });
 
+const updateTableStatusSchema = z.object({
+  status: z.enum([
+    "AVAILABLE",
+    "OCCUPIED",
+  ]),
+});
 
 export const validateCreateTable = (req, res, next) => {
   const result = createTableSchema.safeParse(req.body);
@@ -116,6 +114,24 @@ export const validateListTables = (req, res, next) => {
 
 export const validateUpdateTable = (req, res, next) => {
   const result = updateTableSchema.safeParse(req.body);
+
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: result.error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    });
+  }
+
+  req.validatedBody = result.data;
+  next();
+};
+
+export const validateUpdateTableStatus = (req, res, next) => {
+  const result = updateTableStatusSchema.safeParse(req.body);
 
   if (!result.success) {
     return res.status(400).json({

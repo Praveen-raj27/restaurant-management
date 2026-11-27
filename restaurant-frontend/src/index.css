@@ -1,0 +1,67 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  font-family: 'Inter', sans-serif;
+
+  /* Brand */
+  --color-midnight: #202A35;
+  --color-copper: #C58B5A;
+
+  /* Backgrounds */
+  --color-background: #F5F2ED;
+  --color-surface: #FFFFFF;
+  --color-sidebar: #202A35;
+
+  /* Text */
+  --color-text-primary: #202A35;
+  --color-text-secondary: #737B84;
+  --color-text-inverse: #FFFFFF;
+
+  /* Borders */
+  --color-border: #E7E1DA;
+
+  /* Status */
+  --color-success: #398568;
+  --color-warning: #D69A42;
+  --color-danger: #CF5B55;
+  --color-info: #5285B8;
+
+  /* UI */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 2px 12px rgba(32, 42, 53, 0.05);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-background);
+  color: var(--color-text-primary);
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

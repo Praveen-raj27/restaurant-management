@@ -10,6 +10,15 @@ const moneySchema = z.union([
     "Price must be positive and have at most 2 decimal places"
 );
 
+
+const updateVariantSchema = z.object({
+    id: z.string().uuid().optional(),
+    name: z.string().trim().min(1).max(50),
+    price: moneySchema,
+    displayOrder: z.coerce.number().int().min(0).default(0)
+});
+
+
 const variantSchema = z.object({
     name: z.string().trim().min(1).max(50),
     price: moneySchema,
@@ -122,6 +131,8 @@ const updateItemSchema = z.object({
     foodType: z.enum(["VEG", "NON_VEG", "VEGAN"]).optional(),
 
     price: moneySchema.nullable().optional(),
+    
+    variants: z.array(updateVariantSchema).min(1).optional(),
 
     preparationTime: z.coerce.number()
         .int()
@@ -154,3 +165,4 @@ export const validateUpdateItem = (req, res, next) => {
     req.validatedBody = result.data;
     next();
 };
+

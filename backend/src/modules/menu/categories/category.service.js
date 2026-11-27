@@ -172,31 +172,44 @@ export const updateCategory = async ({
 };
 
 
+
 export const deleteCategory = async ({ categoryId, restaurantId }) => {
-    const category = await prisma.menuCategory.findFirst({
-        where: {
-            id: categoryId,
-            restaurantId,
-            isActive: true
-        }
+  return prisma.$transaction(async (tx) => {
+    const category = await tx.menuCategory.findFirst({
+      where: {
+        id: categoryId,
+        restaurantId,
+        isActive: false,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
     });
 
     if (!category) {
-        throw new Error("CATEGORY_NOT_FOUND");
+      throw new Error("CATEGORY_NOT_FOUND");
     }
 
-    return prisma.menuCategory.update({
-        where: {
-            id: categoryId
-        },
-        data: {
-            isActive: false
-        },
-        select: {
-            id: true,
-            name: true,
-            isActive: true,
-            updatedAt: true
-        }
+    const menuItemCount = await tx.menuItem.count({
+      where: {
+        categoryId,
+      },
     });
+
+    if (menuItemCount > 0) {
+      throw new Error("CATEGORY_HAS_MENU_ITEMS");
+    }
+
+    return tx.menuCategory.delete({
+      where: {
+        id: categoryId,
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+  });
 };
+

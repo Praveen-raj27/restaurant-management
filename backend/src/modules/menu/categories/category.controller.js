@@ -102,6 +102,7 @@ export const editCategory = async (req, res, next) => {
 };
 
 
+
 export const removeCategory = async (req, res, next) => {
     try {
         const category = await deleteCategory({
@@ -111,17 +112,25 @@ export const removeCategory = async (req, res, next) => {
 
         return res.status(200).json({
             success: true,
-            message: "Menu category deactivated successfully",
+            message: "Menu category permanently deleted",
             data: category
         });
     } catch (error) {
         if (error.message === "CATEGORY_NOT_FOUND") {
             return res.status(404).json({
                 success: false,
-                message: "Menu category not found or already inactive"
+                message: "Inactive menu category not found"
+            });
+        }
+
+        if (error.message === "CATEGORY_HAS_MENU_ITEMS") {
+            return res.status(409).json({
+                success: false,
+                message: "This category cannot be deleted because menu items are associated with it. Remove or reassign those items first."
             });
         }
 
         next(error);
     }
 };
+

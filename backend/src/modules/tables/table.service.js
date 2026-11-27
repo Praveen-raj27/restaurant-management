@@ -152,6 +152,7 @@ export const updateTable = async ({
     where: {
       id: tableId,
       restaurantId,
+        isActive: true,
     },
     select: {
       id: true,
@@ -283,4 +284,45 @@ export const rotateTableQrToken = async ({
     table: updatedTable,
     qrToken,
   };
+};
+
+export const updateTableStatus = async ({
+  tableId,
+  restaurantId,
+  status,
+}) => {
+  const existingTable = await prisma.restaurantTable.findFirst({
+    where: {
+      id: tableId,
+      restaurantId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!existingTable) {
+    throw new Error("TABLE_NOT_FOUND");
+  }
+
+  const updatedTable = await prisma.restaurantTable.update({
+    where: {
+      id: existingTable.id,
+    },
+    data: {
+      status,
+    },
+    select: {
+      id: true,
+      tableNumber: true,
+      name: true,
+      capacity: true,
+      status: true,
+      isActive: true,
+      updatedAt: true,
+    },
+  });
+
+  return updatedTable;
 };
