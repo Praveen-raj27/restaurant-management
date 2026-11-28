@@ -11,3 +11,10 @@ __pycache__/
 
 # Node dependencies
 node_modules/
+
+# Database backups
+*.dump
+*.sql
+
+# Generated OCR output
+ocr-service/ocr-output.json
