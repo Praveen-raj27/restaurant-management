@@ -18,3 +18,8 @@ node_modules/
 
 # Generated OCR output
 ocr-service/ocr-output.json
+
+# Environment variables
+.env
+.env.*
+!.env.example
