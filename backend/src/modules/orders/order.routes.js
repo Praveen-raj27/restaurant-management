@@ -5,7 +5,6 @@ import { authenticate, authorize } from "../../middlewares/auth.middleware.js";
 
 import {
   addOrder,
-  serveOrder,
   getOrderCount,
   listRecentOrders
 } from "./order.controller.js";
@@ -23,13 +22,6 @@ router.post(
   addOrder,
 );
 
-// Mark a READY order as SERVED.
-router.patch(
-  "/:orderId/serve",
-  authenticate,
-  authorize("orders.update_status"),
-  serveOrder,
-);
 
 // Retrieve total restaurant orders.
 router.get(

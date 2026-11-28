@@ -49,6 +49,7 @@ enum OrderStatus {
   PLACED
   PREPARING
   READY
+  PICKED_UP
   SERVED
   CANCELLED
 }
@@ -56,6 +57,18 @@ enum OrderStatus {
 enum TableSessionStatus {
   OPEN
   CLOSED
+}
+
+enum WaiterAssignmentMode {
+  OPEN
+  ASSIGNED
+}
+
+enum WaiterAvailability {
+  AVAILABLE
+  BUSY
+  ON_BREAK
+  OFFLINE
 }
 
 model User {
@@ -76,17 +89,18 @@ model User {
 }
 
 model Restaurant {
-  id        String           @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String           @unique
-  email     String?
-  phone     String?
-  address   String?
-  timezone  String           @default("Asia/Kolkata")
-  currency  String           @default("INR")
-  status    RestaurantStatus @default(ACTIVE)
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id                   String               @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String               @unique
+  email                String?
+  phone                String?
+  address              String?
+  timezone             String               @default("Asia/Kolkata")
+  currency             String               @default("INR")
+  status               RestaurantStatus     @default(ACTIVE)
+  waiterAssignmentMode WaiterAssignmentMode @default(OPEN)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
 
   memberships    RestaurantMembership[]
   roles          Role[]
@@ -137,15 +151,25 @@ model RestaurantMembership {
   restaurantId String           @db.Uuid
   roleId       String           @db.Uuid
   status       MembershipStatus @default(ACTIVE)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+
+  waiterAvailability    WaiterAvailability @default(OFFLINE)
+  availabilityUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   role       Role       @relation(fields: [roleId], references: [id])
 
+  assignedSessions TableSession[] @relation("SessionAssignedWaiter")
+  assignedOrders   Order[]        @relation("OrderAssignedWaiter")
+  pickedUpOrders   Order[]        @relation("OrderPickedUpBy")
+  servedOrders     Order[]        @relation("OrderServedBy")
+
   @@unique([userId, restaurantId])
   @@index([restaurantId, status])
+  @@index([restaurantId, waiterAvailability])
 }
 
 model RefreshToken {
@@ -284,9 +308,9 @@ model Order {
   tableId      String  @db.Uuid
   createdById  String? @db.Uuid
 
-  source OrderSource @default(QR)
-  status OrderStatus @default(PLACED)
-  idempotencyKey String? @unique
+  source         OrderSource @default(QR)
+  status         OrderStatus @default(PLACED)
+  idempotencyKey String?     @unique
 
   subtotal       Decimal @db.Decimal(10, 2)
   taxAmount      Decimal @default(0) @db.Decimal(10, 2)
@@ -299,24 +323,37 @@ model Order {
   placedAt    DateTime  @default(now())
   preparingAt DateTime?
   readyAt     DateTime?
+  pickedUpAt  DateTime?
   servedAt    DateTime?
   cancelledAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  waiterMembershipId     String? @db.Uuid
+  pickedUpByMembershipId String? @db.Uuid
+  servedByMembershipId   String? @db.Uuid
+
   restaurant Restaurant      @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
   table      RestaurantTable @relation(fields: [tableId], references: [id], onDelete: Restrict)
   createdBy  User?           @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
+  waiterMembership RestaurantMembership? @relation("OrderAssignedWaiter", fields: [waiterMembershipId], references: [id], onDelete: SetNull)
+
+  pickedUpByMembership RestaurantMembership? @relation("OrderPickedUpBy", fields: [pickedUpByMembershipId], references: [id], onDelete: SetNull)
+
+  servedByMembership RestaurantMembership? @relation("OrderServedBy", fields: [servedByMembershipId], references: [id], onDelete: SetNull)
+
   items     OrderItem[]
   sessionId String?       @db.Uuid
   session   TableSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
-  
 
   @@index([restaurantId, status, createdAt])
   @@index([tableId, createdAt])
   @@index([createdById])
+  @@index([waiterMembershipId, status])
+  @@index([pickedUpByMembershipId])
+  @@index([servedByMembershipId])
 }
 
 model OrderItem {
@@ -356,6 +393,8 @@ model TableSession {
   openedById String? @db.Uuid
   closedById String? @db.Uuid
 
+  assignedWaiterMembershipId String? @db.Uuid
+
   status TableSessionStatus @default(OPEN)
 
   openedAt DateTime  @default(now())
@@ -370,10 +409,13 @@ model TableSession {
   openedBy User? @relation("SessionOpenedBy", fields: [openedById], references: [id], onDelete: SetNull)
   closedBy User? @relation("SessionClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
 
+  assignedWaiterMembership RestaurantMembership? @relation("SessionAssignedWaiter", fields: [assignedWaiterMembershipId], references: [id], onDelete: SetNull)
+
   orders Order[]
 
   @@index([restaurantId, status])
   @@index([tableId, status])
   @@index([openedById])
   @@index([closedById])
+  @@index([assignedWaiterMembershipId, status])
 }

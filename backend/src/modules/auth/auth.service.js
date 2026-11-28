@@ -1,4 +1,3 @@
-
 import bcrypt from "bcrypt";
 import prisma from "../../config/prisma.js";
 import crypto from "node:crypto";
@@ -7,6 +6,7 @@ import {
   generateRefreshToken,
   hashRefreshToken,
 } from "../../utils/token.js";
+
 
 const roles = [
   {
@@ -32,6 +32,16 @@ const roles = [
       "orders.update_status",
       "kitchen.view",
       "kitchen.manage",
+
+      // Waiter management
+      "waiters.view",
+      "waiters.manage",
+      "waiters.availability.update",
+      "waiters.orders.view",
+      "waiters.orders.claim",
+      "waiters.orders.pickup",
+      "waiters.orders.serve",
+
       "payments.view",
       "payments.process",
       "reports.view",
@@ -57,7 +67,13 @@ const roles = [
       "tables.status.update",
       "orders.view",
       "orders.create",
-      "orders.update_status",
+
+      // Waiter operations
+      "waiters.availability.update",
+      "waiters.orders.view",
+      "waiters.orders.claim",
+      "waiters.orders.pickup",
+      "waiters.orders.serve",
     ],
   },
   {
@@ -73,6 +89,7 @@ const roles = [
   },
 ];
 
+
 export const registerOwner = async ({
   name,
   email,
@@ -80,17 +97,10 @@ export const registerOwner = async ({
   restaurantName,
 }) => {
   // 1. Validate refresh-token expiration configuration
-  const refreshTokenDays = Number(
-    process.env.REFRESH_TOKEN_EXPIRES_DAYS || 7
-  );
+  const refreshTokenDays = Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS || 7);
 
-  if (
-    !Number.isInteger(refreshTokenDays) ||
-    refreshTokenDays <= 0
-  ) {
-    throw new Error(
-      "Invalid refresh token expiration configuration"
-    );
+  if (!Number.isInteger(refreshTokenDays) || refreshTokenDays <= 0) {
+    throw new Error("Invalid refresh token expiration configuration");
   }
 
   // 2. Hash password before storing it
@@ -125,15 +135,12 @@ export const registerOwner = async ({
 
     if (allPermissions.length === 0) {
       throw new Error(
-        "Permission catalogue is empty. Run database seed first."
+        "Permission catalogue is empty. Run database seed first.",
       );
     }
 
     const permissionMap = new Map(
-      allPermissions.map((permission) => [
-        permission.key,
-        permission.id,
-      ])
+      allPermissions.map((permission) => [permission.key, permission.id]),
     );
 
     // 6. Create restaurant-specific roles and mappings
@@ -174,20 +181,20 @@ export const registerOwner = async ({
 
     // 7. Create owner membership
     const membership = await tx.restaurantMembership.create({
-  data: {
-    userId: user.id,
-    restaurantId: restaurant.id,
-    roleId: createdRoles.OWNER,
-  },
-  include: {
-    role: {
-      select: {
-        id: true,
-        name: true,
+      data: {
+        userId: user.id,
+        restaurantId: restaurant.id,
+        roleId: createdRoles.OWNER,
       },
-    },
-  },
-});
+      include: {
+        role: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
 
     // 8. Generate access token
     const accessToken = generateAccessToken({
@@ -209,8 +216,7 @@ export const registerOwner = async ({
         tokenHash,
         familyId: crypto.randomUUID(),
         expiresAt: new Date(
-          Date.now() +
-            refreshTokenDays * 24 * 60 * 60 * 1000
+          Date.now() + refreshTokenDays * 24 * 60 * 60 * 1000,
         ),
       },
     });
@@ -228,35 +234,25 @@ export const registerOwner = async ({
         slug: restaurant.slug,
       },
       membership: {
-  id: membership.id,
-  status: membership.status,
-  role: {
-    id: membership.role.id,
-    name: membership.role.name,
-  },
-},
+        id: membership.id,
+        status: membership.status,
+        role: {
+          id: membership.role.id,
+          name: membership.role.name,
+        },
+      },
       accessToken,
       refreshToken,
     };
   });
 };
 
-
-
-
 export const loginUser = async ({ email, password }) => {
   // 1. Validate refresh-token expiration configuration
-  const refreshTokenDays = Number(
-    process.env.REFRESH_TOKEN_EXPIRES_DAYS || 7
-  );
+  const refreshTokenDays = Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS || 7);
 
-  if (
-    !Number.isInteger(refreshTokenDays) ||
-    refreshTokenDays <= 0
-  ) {
-    throw new Error(
-      "Invalid refresh token expiration configuration"
-    );
+  if (!Number.isInteger(refreshTokenDays) || refreshTokenDays <= 0) {
+    throw new Error("Invalid refresh token expiration configuration");
   }
 
   // 2. Find user by email
@@ -283,10 +279,7 @@ export const loginUser = async ({ email, password }) => {
     throw new Error("INVALID_CREDENTIALS");
   }
 
-  const isPasswordValid = await bcrypt.compare(
-    password,
-    user.passwordHash
-  );
+  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
   if (!isPasswordValid) {
     throw new Error("INVALID_CREDENTIALS");
@@ -320,10 +313,7 @@ export const loginUser = async ({ email, password }) => {
       userId: user.id,
       tokenHash,
       familyId: crypto.randomUUID(),
-      expiresAt: new Date(
-        Date.now() +
-          refreshTokenDays * 24 * 60 * 60 * 1000
-      ),
+      expiresAt: new Date(Date.now() + refreshTokenDays * 24 * 60 * 60 * 1000),
     },
   });
 
@@ -340,18 +330,17 @@ export const loginUser = async ({ email, password }) => {
       slug: membership.restaurant.slug,
     },
     membership: {
-  id: membership.id,
-  status: membership.status,
-  role: {
-    id: membership.role.id,
-    name: membership.role.name,
-  },
-},
+      id: membership.id,
+      status: membership.status,
+      role: {
+        id: membership.role.id,
+        name: membership.role.name,
+      },
+    },
     accessToken,
     refreshToken,
   };
 };
-
 
 export const logoutUser = async (rawRefreshToken) => {
   if (!rawRefreshToken) {
@@ -371,22 +360,14 @@ export const logoutUser = async (rawRefreshToken) => {
   });
 };
 
-
-
-
 export const refreshUserSession = async (rawRefreshToken) => {
   if (!rawRefreshToken) {
     throw new Error("INVALID_REFRESH_TOKEN");
   }
 
-  const refreshTokenDays = Number(
-    process.env.REFRESH_TOKEN_EXPIRES_DAYS || 7
-  );
+  const refreshTokenDays = Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS || 7);
 
-  if (
-    !Number.isInteger(refreshTokenDays) ||
-    refreshTokenDays <= 0
-  ) {
+  if (!Number.isInteger(refreshTokenDays) || refreshTokenDays <= 0) {
     throw new Error("Invalid refresh token expiration configuration");
   }
 
@@ -489,7 +470,7 @@ export const refreshUserSession = async (rawRefreshToken) => {
           tokenHash: hashRefreshToken(newRefreshToken),
           familyId: storedToken.familyId,
           expiresAt: new Date(
-            Date.now() + refreshTokenDays * 24 * 60 * 60 * 1000
+            Date.now() + refreshTokenDays * 24 * 60 * 60 * 1000,
           ),
         },
       });
@@ -506,20 +487,20 @@ export const refreshUserSession = async (rawRefreshToken) => {
           slug: membership.restaurant.slug,
         },
         membership: {
-  id: membership.id,
-  status: membership.status,
-  role: {
-    id: membership.role.id,
-    name: membership.role.name,
-  },
-},
+          id: membership.id,
+          status: membership.status,
+          role: {
+            id: membership.role.id,
+            name: membership.role.name,
+          },
+        },
         accessToken,
         refreshToken: newRefreshToken,
       };
     },
     {
       isolationLevel: "Serializable",
-    }
+    },
   );
 
   // Throw outside the transaction so security updates are committed.
@@ -529,4 +510,3 @@ export const refreshUserSession = async (rawRefreshToken) => {
 
   return result;
 };
-

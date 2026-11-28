@@ -175,6 +175,7 @@ export const getOrOpenTableSession = async ({
 };
 
 // Staff closes a table session.
+
 export const closeTableSession = async ({
   restaurantId,
   tableId,
@@ -204,12 +205,18 @@ export const closeTableSession = async ({
           throw new Error("OPEN_SESSION_NOT_FOUND");
         }
 
+        // Check unfinished orders belonging to this session only.
         const unfinishedOrder = await tx.order.findFirst({
           where: {
             restaurantId,
-            tableId,
+            sessionId: session.id,
             status: {
-              in: ["PLACED", "PREPARING", "READY"],
+              in: [
+                "PLACED",
+                "PREPARING",
+                "READY",
+                "PICKED_UP",
+              ],
             },
           },
           select: {
@@ -222,23 +229,43 @@ export const closeTableSession = async ({
           throw new Error("SESSION_HAS_UNFINISHED_ORDERS");
         }
 
-        const closedSession = await tx.tableSession.update({
-          where: { id: session.id },
+        // Close the session and release its waiter assignment.
+        const sessionUpdate = await tx.tableSession.updateMany({
+          where: {
+            id: session.id,
+            restaurantId,
+            status: "OPEN",
+          },
           data: {
             status: "CLOSED",
             closedAt: new Date(),
             closedById,
+            assignedWaiterMembershipId: null,
           },
         });
 
+        if (sessionUpdate.count !== 1) {
+          throw new Error("OPEN_SESSION_NOT_FOUND");
+        }
+
         await tx.restaurantTable.update({
-          where: { id: session.table.id },
-          data: { status: "AVAILABLE" },
+          where: {
+            id: session.table.id,
+          },
+          data: {
+            status: "AVAILABLE",
+          },
         });
 
-        return closedSession;
+        return tx.tableSession.findUnique({
+          where: {
+            id: session.id,
+          },
+        });
       },
-      { isolationLevel: "Serializable" },
+      {
+        isolationLevel: "Serializable",
+      },
     ),
   );
 };

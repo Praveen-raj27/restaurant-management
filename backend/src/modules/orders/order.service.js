@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../../config/prisma.js";
 import { withTransactionRetry } from "../../utils/transaction.utils.js";
 
+
 export const createOrder = async ({
   restaurantId,
   tableId,
@@ -30,21 +31,63 @@ export const createOrder = async ({
           throw new Error("TABLE_RESERVED");
         }
 
-        // 2. Resolve the active session server-side.
+        // 2. Get restaurant waiter assignment configuration.
+        const restaurant = await tx.restaurant.findUnique({
+          where: { id: restaurantId },
+          select: {
+            waiterAssignmentMode: true,
+          },
+        });
+
+        if (!restaurant) {
+          throw new Error("RESTAURANT_NOT_FOUND");
+        }
+
+        // 3. Resolve the active table session.
         const session = await tx.tableSession.findFirst({
           where: {
             tableId: table.id,
             restaurantId,
             status: "OPEN",
           },
-          select: { id: true },
+          select: {
+            id: true,
+            assignedWaiterMembershipId: true,
+          },
         });
 
         if (!session) {
           throw new Error("ACTIVE_TABLE_SESSION_REQUIRED");
         }
 
-        // 3. Load menu items from this restaurant.
+        // 4. Resolve waiter assignment based on restaurant mode.
+        let waiterMembershipId = null;
+
+        if (
+          restaurant.waiterAssignmentMode === "ASSIGNED" &&
+          session.assignedWaiterMembershipId
+        ) {
+          const waiter = await tx.restaurantMembership.findFirst({
+            where: {
+              id: session.assignedWaiterMembershipId,
+              restaurantId,
+              status: "ACTIVE",
+              waiterAvailability: {
+                in: ["AVAILABLE", "BUSY"],
+              },
+              role: {
+                name: "WAITER",
+              },
+            },
+            select: {
+              id: true,
+            },
+          });
+
+          waiterMembershipId = waiter?.id ?? null;
+        }
+
+        // 5. Load menu items from this restaurant.
         const menuItemIds = [
           ...new Set(data.items.map((item) => item.menuItemId)),
         ];
@@ -65,7 +108,7 @@ export const createOrder = async ({
           menuItems.map((item) => [item.id, item]),
         );
 
-        // 4. Validate items and calculate prices from database values.
+        // 6. Validate items and calculate prices from database values.
         const orderItems = data.items.map((item) => {
           const menuItem = menuItemMap.get(item.menuItemId);
 
@@ -115,7 +158,7 @@ export const createOrder = async ({
           };
         });
 
-        // 5. Calculate totals.
+        // 7. Calculate totals.
         const subtotal = orderItems.reduce(
           (sum, item) => sum + item.totalPrice,
           0,
@@ -125,12 +168,13 @@ export const createOrder = async ({
         const discountAmount = 0;
         const totalAmount = subtotal + taxAmount - discountAmount;
 
-        // 6. Create order linked to the active table session.
+        // 8. Create order linked to the active table session.
         const order = await tx.order.create({
           data: {
             restaurantId,
             tableId,
             sessionId: session.id,
+            waiterMembershipId,
             createdById,
             source,
             status: "PLACED",
@@ -156,7 +200,7 @@ export const createOrder = async ({
           },
         });
 
-        // 7. Ensure the table remains occupied.
+        // 9. Ensure the table remains occupied.
         await tx.restaurantTable.update({
           where: { id: table.id },
           data: { status: "OCCUPIED" },

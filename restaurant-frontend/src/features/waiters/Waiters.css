@@ -1,0 +1,137 @@
+
+.waiter-availability-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+
+.waiter-availability-control select {
+  min-width: 130px;
+  padding: 8px 32px 8px 12px;
+  border: 1px solid #3b4b63;
+  border-radius: 8px;
+  background-color: #17243a;
+  color: #e9ece8;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  color-scheme: dark;
+}
+
+.waiter-availability-control select option {
+  background-color: #17243a;
+  color: #e9ece8;
+}
+
+.waiter-availability-control select:focus {
+  border-color: #e9b96e;
+  box-shadow: 0 0 0 2px rgba(233, 185, 110, 0.15);
+}
+
+.waiter-availability-control select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+/* Waiter summary cards */
+.waiter-summary {
+  display: flex;
+  gap: 18px;
+  margin: 28px 0;
+  flex-wrap: wrap;
+}
+
+.waiter-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 190px;
+  padding: 18px 22px;
+  background: #ffffff;
+  border: 1px solid #e7e0d8;
+  border-radius: 14px;
+  box-shadow: 0 3px 12px rgba(23, 36, 58, 0.04);
+}
+
+.waiter-stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #f5eadf;
+  color: #9b6845;
+  font-size: 21px;
+  flex-shrink: 0;
+}
+
+.waiter-stat-card div:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.waiter-stat-card span {
+  color: #77808c;
+  font-size: 13px;
+}
+
+.waiter-stat-card strong {
+  color: #17243a;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+/* Availability dropdown */
+.waiter-availability-control {
+  display: flex;
+  align-items: center;
+}
+
+.waiter-availability-control select {
+  width: 145px;
+  min-width: 145px;
+  height: 42px;
+  padding: 0 32px 0 12px;
+  border: 1px solid #d8dce3;
+  border-radius: 8px;
+  background-color: #ffffff;
+  color: #17243a;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  appearance: auto;
+  color-scheme: light;
+}
+
+.waiter-availability-control select option {
+  background: #ffffff;
+  color: #17243a;
+}
+
+.waiter-availability-control select:focus {
+  border-color: #b9874f;
+  box-shadow: 0 0 0 3px rgba(233, 185, 110, 0.15);
+}
+
+.waiter-availability-control select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .waiter-summary {
+    gap: 10px;
+  }
+
+  .waiter-stat-card {
+    flex: 1;
+    min-width: 140px;
+    padding: 14px;
+  }
+}

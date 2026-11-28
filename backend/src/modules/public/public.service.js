@@ -168,6 +168,7 @@ export const getPublicMenuByQrToken = async (qrToken) => {
 
 
 
+
 export const placeGuestOrder = async ({
   qrToken,
   items,
@@ -235,6 +236,7 @@ export const placeGuestOrder = async ({
               restaurant: {
                 select: {
                   currency: true,
+                  waiterAssignmentMode: true,
                 },
               },
             },
@@ -248,6 +250,7 @@ export const placeGuestOrder = async ({
             throw new Error("TABLE_NOT_OCCUPIED");
           }
 
+          // 3. Resolve the active table session.
           const session = await tx.tableSession.findFirst({
             where: {
               restaurantId: table.restaurantId,
@@ -256,6 +259,7 @@ export const placeGuestOrder = async ({
             },
             select: {
               id: true,
+              assignedWaiterMembershipId: true,
             },
           });
 
@@ -263,6 +267,34 @@ export const placeGuestOrder = async ({
             throw new Error("OPEN_SESSION_NOT_FOUND");
           }
 
+          // 4. Resolve waiter assignment based on restaurant mode.
+          let waiterMembershipId = null;
+
+          if (
+            table.restaurant.waiterAssignmentMode === "ASSIGNED" &&
+            session.assignedWaiterMembershipId
+          ) {
+            const waiter = await tx.restaurantMembership.findFirst({
+              where: {
+                id: session.assignedWaiterMembershipId,
+                restaurantId: table.restaurantId,
+                status: "ACTIVE",
+                waiterAvailability: {
+                  in: ["AVAILABLE", "BUSY"],
+                },
+                role: {
+                  name: "WAITER",
+                },
+              },
+              select: {
+                id: true,
+              },
+            });
+
+            waiterMembershipId = waiter?.id ?? null;
+          }
+
+          // 5. Load menu items from this restaurant.
           const menuItemIds = [
             ...new Set(items.map((item) => item.menuItemId)),
           ];
@@ -364,11 +396,13 @@ export const placeGuestOrder = async ({
             };
           });
 
+          // 6. Create order linked to the session and assigned waiter.
           const createdOrder = await tx.order.create({
             data: {
               restaurantId: table.restaurantId,
               tableId: table.id,
               sessionId: session.id,
+              waiterMembershipId,
               source: "QR",
               status: "PLACED",
               idempotencyKey,
@@ -393,7 +427,7 @@ export const placeGuestOrder = async ({
       ),
     );
   } catch (error) {
-    // 3. Another simultaneous request may have created this order.
+    // 7. Another simultaneous request may have created this order.
     // Recover the original order instead of creating a duplicate.
     try {
       const duplicateOrder = await prisma.order.findUnique({
@@ -416,7 +450,7 @@ export const placeGuestOrder = async ({
     throw error;
   }
 
-  // 4. Emit only for a newly created order, after transaction commit.
+  // 8. Emit only for a newly created order, after transaction commit.
   try {
     getIO()
       .to(`restaurant:${order.restaurantId}`)
@@ -427,5 +461,6 @@ export const placeGuestOrder = async ({
 
   return order;
 };
+
 
 

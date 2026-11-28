@@ -1,3 +1,4 @@
+
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -25,6 +26,30 @@ const permissions = [
 
   { key: "kitchen.view", description: "View kitchen tickets" },
   { key: "kitchen.manage", description: "Manage kitchen tickets" },
+
+  // Waiter management
+  { key: "waiters.view", description: "View restaurant waiters" },
+  { key: "waiters.manage", description: "Manage waiter assignments" },
+  {
+    key: "waiters.availability.update",
+    description: "Update waiter availability",
+  },
+  {
+    key: "waiters.orders.view",
+    description: "View waiter operational orders",
+  },
+  {
+    key: "waiters.orders.claim",
+    description: "Claim unassigned ready orders",
+  },
+  {
+    key: "waiters.orders.pickup",
+    description: "Pick up assigned ready orders",
+  },
+  {
+    key: "waiters.orders.serve",
+    description: "Mark picked-up orders as served",
+  },
 
   { key: "payments.view", description: "View payments" },
   { key: "payments.process", description: "Process payments" },
@@ -57,6 +82,13 @@ const roles = [
       "orders.update_status",
       "kitchen.view",
       "kitchen.manage",
+      "waiters.view",
+      "waiters.manage",
+      "waiters.availability.update",
+      "waiters.orders.view",
+      "waiters.orders.claim",
+      "waiters.orders.pickup",
+      "waiters.orders.serve",
       "payments.view",
       "payments.process",
       "reports.view",
@@ -82,7 +114,11 @@ const roles = [
       "tables.status.update",
       "orders.view",
       "orders.create",
-      "orders.update_status",
+      "waiters.availability.update",
+      "waiters.orders.view",
+      "waiters.orders.claim",
+      "waiters.orders.pickup",
+      "waiters.orders.serve",
     ],
   },
   {
@@ -99,7 +135,7 @@ const roles = [
 ];
 
 async function main() {
-  // 1. Create global permissions
+  // 1. Create global permissions.
   for (const permission of permissions) {
     await prisma.permission.upsert({
       where: { key: permission.key },
@@ -112,7 +148,7 @@ async function main() {
 
   console.log(`${permissions.length} permissions seeded successfully`);
 
-  // 2. Validate role policies against the permission catalogue
+  // 2. Validate role policies.
   const permissionKeys = new Set(
     permissions.map((permission) => permission.key),
   );
@@ -128,32 +164,63 @@ async function main() {
   }
 
   console.log(`${roles.length} role policies configured successfully`);
-    // 3. Backfill tables.status.update for existing restaurant roles
-  const statusPermission = await prisma.permission.findUnique({
+
+  // 3. Backfill permissions for existing restaurant roles.
+  const permissionRecords = await prisma.permission.findMany({
     where: {
-      key: "tables.status.update",
+      key: {
+        in: [
+          "tables.status.update",
+          "waiters.view",
+          "waiters.manage",
+          "waiters.availability.update",
+          "waiters.orders.view",
+          "waiters.orders.claim",
+          "waiters.orders.pickup",
+          "waiters.orders.serve",
+        ],
+      },
     },
     select: {
       id: true,
+      key: true,
     },
   });
 
-  const eligibleRoles = await prisma.role.findMany({
-    where: {
-      name: {
-        in: ["OWNER", "MANAGER", "WAITER"],
-      },
-    },
+  const permissionMap = new Map(
+    permissionRecords.map((permission) => [
+      permission.key,
+      permission.id,
+    ]),
+  );
+
+  const existingRoles = await prisma.role.findMany({
     select: {
       id: true,
       name: true,
     },
   });
 
-  const rolePermissionRecords = eligibleRoles.map((role) => ({
-    roleId: role.id,
-    permissionId: statusPermission.id,
-  }));
+  const rolePermissionRecords = [];
+
+  for (const role of existingRoles) {
+    const rolePolicy = roles.find(
+      (configuredRole) => configuredRole.name === role.name,
+    );
+
+    if (!rolePolicy) continue;
+
+    for (const permissionKey of rolePolicy.permissions) {
+      const permissionId = permissionMap.get(permissionKey);
+
+      if (permissionId) {
+        rolePermissionRecords.push({
+          roleId: role.id,
+          permissionId,
+        });
+      }
+    }
+  }
 
   const result = await prisma.rolePermission.createMany({
     data: rolePermissionRecords,
@@ -161,7 +228,7 @@ async function main() {
   });
 
   console.log(
-    `Table status permission backfilled for ${result.count} role assignments`,
+    `${result.count} role permissions backfilled successfully`,
   );
 }
 

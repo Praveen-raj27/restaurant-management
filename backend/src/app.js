@@ -14,6 +14,7 @@ import menuImportRoutes from "./modules/menu-import/import.routes.js";
 import orderRoutes from "./modules/orders/order.routes.js";
 import kitchenRoutes from "./modules/kitchen/kitchen.routes.js";
 import tableSessionRoutes from "./modules/table-sessions/table-session.routes.js";
+import waiterRoutes from "./modules/waiters/waiter.routes.js";
 
 const app = express();
 
@@ -68,5 +69,6 @@ app.use("/api/v1/menu/imports", menuImportRoutes);
 app.use("/api/v1/orders", orderRoutes);
 app.use("/api/v1/kitchen", kitchenRoutes);
 app.use("/api/v1/table-sessions", tableSessionRoutes);
+app.use("/api/v1/waiters", waiterRoutes);
 
 export default app;

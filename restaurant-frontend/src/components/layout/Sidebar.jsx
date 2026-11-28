@@ -1,16 +1,17 @@
-
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   LayoutDashboard,
   Users,
+  UserCheck,
   Armchair,
   Tags,
   Utensils,
   FileUp,
   Settings,
   X,
-  ChefHat
+  ChefHat,
+  ClipboardList,
 } from "lucide-react";
 
 const navigation = [
@@ -32,6 +33,12 @@ const navigation = [
         name: "Employees",
         path: "/employees",
         icon: Users,
+        roles: ["OWNER", "MANAGER"],
+      },
+      {
+        name: "Waiters",
+        path: "/waiters",
+        icon: UserCheck,
         roles: ["OWNER", "MANAGER"],
       },
       {
@@ -66,16 +73,27 @@ const navigation = [
     ],
   },
   {
-  label: "KITCHEN OPERATIONS",
-  items: [
-    {
-      name: "Kitchen Display",
-      path: "/kitchen",
-      icon: ChefHat,
-      roles: ["OWNER", "MANAGER", "KITCHEN_STAFF"],
-    },
-  ],
-},
+    label: "KITCHEN OPERATIONS",
+    items: [
+      {
+        name: "Kitchen Display",
+        path: "/kitchen",
+        icon: ChefHat,
+        roles: ["OWNER", "MANAGER", "KITCHEN_STAFF"],
+      },
+    ],
+  },
+  {
+    label: "WAITER OPERATIONS",
+    items: [
+      {
+        name: "My Orders",
+        path: "/waiter/orders",
+        icon: ClipboardList,
+        roles: ["WAITER"],
+      },
+    ],
+  },
   {
     label: "PREFERENCES",
     items: [
@@ -117,7 +135,7 @@ function Sidebar({ isOpen, onClose }) {
       <nav className="sidebar-navigation">
         {navigation.map((section) => {
           const visibleItems = section.items.filter((item) =>
-            item.roles.includes(role)
+            item.roles.includes(role),
           );
 
           if (visibleItems.length === 0) return null;

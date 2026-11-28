@@ -58,12 +58,15 @@ const authenticateSocket = async (socket, next) => {
     );
 
     const isOwner = membership.role.name === "OWNER";
-    const canViewKitchen =
-      isOwner || permissions.includes("kitchen.view");
 
-    if (!canViewKitchen) {
+    const canAccessOrderUpdates =
+      isOwner ||
+      permissions.includes("kitchen.view") ||
+      permissions.includes("waiters.orders.view");
+
+    if (!canAccessOrderUpdates) {
       return next(
-        new Error("You do not have permission to access kitchen orders")
+        new Error("You do not have permission to access order updates")
       );
     }
 
@@ -102,15 +105,20 @@ export const initializeSocket = (httpServer) => {
   io.use(authenticateSocket);
 
   io.on("connection", (socket) => {
-    const { restaurantId, userId } = socket.data.user;
+    const {
+      restaurantId,
+      userId,
+      membershipId,
+    } = socket.data.user;
 
-    // Each restaurant has its own isolated kitchen room.
-    const room = `restaurant:${restaurantId}`;
+    // Restaurant-wide events.
+    socket.join(`restaurant:${restaurantId}`);
 
-    socket.join(room);
+    // Individual waiter/manager membership events.
+    socket.join(`membership:${membershipId}`);
 
     console.log(
-      `Kitchen socket connected: ${socket.id}, User: ${userId}, Restaurant: ${restaurantId}`
+      `Socket connected: ${socket.id}, User: ${userId}, Restaurant: ${restaurantId}`
     );
 
     socket.on("disconnect", (reason) => {
