@@ -2,6 +2,8 @@
 import {
   createOrder,
   markOrderAsServed,
+  getTotalOrders,
+  getRecentOrders
 } from "./order.service.js";
 
 export const addOrder = async (req, res, next) => {
@@ -92,6 +94,38 @@ export const serveOrder = async (req, res, next) => {
       });
     }
 
+    return next(error);
+  }
+};
+
+export const getOrderCount = async (req, res, next) => {
+  try {
+    const totalOrders = await getTotalOrders({
+      restaurantId: req.user.restaurantId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalOrders,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const listRecentOrders = async (req, res, next) => {
+  try {
+    const orders = await getRecentOrders({
+      restaurantId: req.user.restaurantId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
     return next(error);
   }
 };

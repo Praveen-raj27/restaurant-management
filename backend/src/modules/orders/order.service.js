@@ -210,3 +210,38 @@ export const markOrderAsServed = async ({
     });
   });
 };
+
+export const getTotalOrders = async ({ restaurantId }) => {
+  return prisma.order.count({
+    where: {
+      restaurantId,
+    },
+  });
+};
+
+
+export const getRecentOrders = async ({ restaurantId }) => {
+  return prisma.order.findMany({
+    where: {
+      restaurantId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 10,
+    include: {
+      items: {
+        select: {
+          itemName: true,
+          quantity: true,
+        },
+      },
+      table: {
+        select: {
+          tableNumber: true,
+          name: true,
+        },
+      },
+    },
+  });
+};

@@ -9,6 +9,8 @@ import {
   Users,
 } from "lucide-react";
 
+import { getRestaurantSocket } from "../../services/socket";
+
 import StatCard from "./components/StatCard";
 import RevenueChart from "./components/RevenueChart";
 import RecentOrders from "./components/RecentOrders";
@@ -17,12 +19,17 @@ import PopularMenuItems from "./components/PopularMenuItems";
 
 import tableService from "../tables/tableService";
 import employeeService from "../employees/employeeService";
+import orderService from "../orders/orderService";
 
 import "./Dashboard.css";
 
 function Dashboard() {
   const role = useSelector(
     (state) => state.auth.membership?.role?.name
+  );
+
+  const accessToken = useSelector(
+    (state) => state.auth.accessToken
   );
 
   const canViewManagementDashboard = [
@@ -41,6 +48,14 @@ function Dashboard() {
     "MANAGER",
   ].includes(role);
 
+  const canViewOrders = [
+    "OWNER",
+    "MANAGER",
+    "KITCHEN_STAFF",
+    "WAITER",
+    "CASHIER",
+  ].includes(role);
+
   const [activeTab, setActiveTab] = useState("overview");
 
   // Table states
@@ -53,7 +68,11 @@ function Dashboard() {
   const [employeesLoading, setEmployeesLoading] = useState(true);
   const [employeesError, setEmployeesError] = useState("");
 
-  // Available tabs based on role
+  // Order states
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState("");
+
   const tabs = [
     { id: "overview", label: "Overview" },
     ...(canViewManagementDashboard
@@ -64,7 +83,7 @@ function Dashboard() {
       : []),
   ];
 
-  // Fetch tables
+  // Initial table fetch
   const fetchTables = useCallback(async () => {
     if (!canViewTables) return;
 
@@ -88,7 +107,7 @@ function Dashboard() {
     }
   }, [canViewTables]);
 
-  // Fetch active employee count
+  // Initial employee fetch
   const fetchActiveEmployees = useCallback(async () => {
     if (!canViewEmployees) return;
 
@@ -112,7 +131,27 @@ function Dashboard() {
     }
   }, [canViewEmployees]);
 
-  // Initial fetch and automatic refresh
+  // Initial order count fetch
+  const fetchTotalOrders = useCallback(async () => {
+    if (!canViewOrders) return;
+
+    try {
+      setOrdersError("");
+
+      const response = await orderService.getOrderCount();
+
+      setTotalOrders(response.data.totalOrders);
+    } catch (error) {
+      setOrdersError(
+        error.response?.data?.message ||
+          "Unable to load order information."
+      );
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, [canViewOrders]);
+
+  // Fetch initial dashboard data only once.
   useEffect(() => {
     if (canViewTables) {
       fetchTables();
@@ -126,23 +165,41 @@ function Dashboard() {
       setEmployeesLoading(false);
     }
 
-    const intervalId = setInterval(() => {
-      if (canViewTables) {
-        fetchTables();
-      }
-
-      if (canViewEmployees) {
-        fetchActiveEmployees();
-      }
-    }, 15000);
-
-    return () => clearInterval(intervalId);
+    if (canViewOrders) {
+      fetchTotalOrders();
+    } else {
+      setOrdersLoading(false);
+    }
   }, [
     fetchTables,
     fetchActiveEmployees,
+    fetchTotalOrders,
     canViewTables,
     canViewEmployees,
+    canViewOrders,
   ]);
+
+  // Shared Socket.IO connection for real-time order updates.
+  useEffect(() => {
+    if (!accessToken || !canViewOrders) return;
+
+    const socket = getRestaurantSocket(accessToken);
+
+    if (!socket) return;
+
+    const handleNewOrder = (newOrder) => {
+      console.log("Dashboard received new order:", newOrder);
+
+      setTotalOrders((current) => current + 1);
+      setOrdersError("");
+    };
+
+    socket.on("order:new", handleNewOrder);
+
+    return () => {
+      socket.off("order:new", handleNewOrder);
+    };
+  }, [accessToken, canViewOrders]);
 
   // Calculate table occupancy
   const occupiedCount = tables.filter(
@@ -156,7 +213,6 @@ function Dashboard() {
       ? Math.round((occupiedCount / totalTables) * 100)
       : 0;
 
-  // Management dashboard statistics
   const managementStats = [
     {
       title: "Today's Revenue",
@@ -168,11 +224,21 @@ function Dashboard() {
     },
     {
       title: "Total Orders",
-      value: "124",
-      change: "+8.2%",
+      value: ordersLoading
+        ? "Loading..."
+        : ordersError
+          ? "--"
+          : totalOrders.toLocaleString("en-IN"),
+      change: ordersLoading
+        ? "--"
+        : ordersError
+          ? "--"
+          : "Live",
       trend: "up",
       icon: ShoppingBag,
-      description: "vs yesterday",
+      description: ordersError
+        ? "Unable to load orders"
+        : "All-time orders",
     },
     {
       title: "Occupied Tables",
@@ -212,7 +278,6 @@ function Dashboard() {
     },
   ];
 
-  // Waiter dashboard statistics
   const waiterStats = [
     {
       title: "Occupied Tables",
@@ -247,12 +312,9 @@ function Dashboard() {
   };
 
   const pageDescription = {
-    overview:
-      "Here's what's happening at your restaurant today.",
-    analytics:
-      "Track revenue and understand your restaurant performance.",
-    occupancy:
-      "Monitor table availability across your restaurant.",
+    overview: "Here's what's happening at your restaurant today.",
+    analytics: "Track revenue and understand your restaurant performance.",
+    occupancy: "Monitor table availability across your restaurant.",
   };
 
   return (
@@ -301,8 +363,7 @@ function Dashboard() {
                 <h2>Your workspace is being prepared</h2>
                 <p>
                   Relevant dashboard information and tools
-                  will appear here as your role modules become
-                  available.
+                  will appear here as your role modules become available.
                 </p>
               </div>
             )}

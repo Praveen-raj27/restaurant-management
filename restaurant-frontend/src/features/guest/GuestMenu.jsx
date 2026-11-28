@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   UtensilsCrossed,
@@ -12,10 +12,37 @@ import {
   Minus,
   X,
   Trash2,
+  Search,
+  List,
+  ChevronRight,
+  CheckCircle2,
 } from "lucide-react";
 
 import guestService from "./guestService";
 import "./GuestMenu.css";
+
+const generateIdempotencyKey = () => {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+    /[xy]/g,
+    (character) => {
+      const random = Math.floor(Math.random() * 16);
+
+      const value =
+        character === "x"
+          ? random
+          : (random & 0x3) | 0x8;
+
+      return value.toString(16);
+    }
+  );
+};
 
 function GuestMenu() {
   const [searchParams] = useSearchParams();
@@ -27,6 +54,16 @@ function GuestMenu() {
   const [cart, setCart] = useState([]);
   const [selectedVariants, setSelectedVariants] = useState({});
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [orderError, setOrderError] = useState("");
+  const [placedOrder, setPlacedOrder] = useState(null);
+
+  const categoryRefs = useRef({});
+  const orderSubmissionRef = useRef(false);
+  const idempotencyKeyRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -69,7 +106,7 @@ function GuestMenu() {
   }, [qrToken]);
 
   const addToCart = (item, variant = null) => {
-    if (!menu?.table?.hasOpenSession) return;
+    if (!menu?.table?.hasOpenSession || isPlacingOrder) return;
 
     const price = Number(variant ? variant.price : item.price);
 
@@ -107,6 +144,8 @@ function GuestMenu() {
   };
 
   const updateQuantity = (key, change) => {
+    if (isPlacingOrder) return;
+
     setCart((currentCart) =>
       currentCart
         .map((entry) =>
@@ -119,6 +158,8 @@ function GuestMenu() {
   };
 
   const removeFromCart = (key) => {
+    if (isPlacingOrder) return;
+
     setCart((currentCart) =>
       currentCart.filter((entry) => entry.key !== key)
     );
@@ -147,6 +188,90 @@ function GuestMenu() {
   const formatPrice = (price) =>
     `${menu?.restaurant?.currency || ""} ${Number(price).toFixed(2)}`;
 
+  const handlePlaceOrder = async () => {
+    if (
+      orderSubmissionRef.current ||
+      !qrToken ||
+      !table.hasOpenSession ||
+      cart.length === 0
+    ) {
+      return;
+    }
+
+    orderSubmissionRef.current = true;
+    setIsPlacingOrder(true);
+    setOrderError("");
+
+    try {
+      const payload = {
+        qrToken,
+        items: cart.map((entry) => ({
+          menuItemId: entry.itemId,
+          variantId: entry.variantId,
+          quantity: entry.quantity,
+        })),
+      };
+
+      // Generate a key once per checkout attempt.
+      // Keep it when a request fails so a retry cannot create a duplicate.
+      if (!idempotencyKeyRef.current) {
+        idempotencyKeyRef.current = generateIdempotencyKey();
+      }
+
+      const response = await guestService.placeOrder(
+        payload,
+        idempotencyKeyRef.current
+      );
+
+      const order = response.data;
+
+      setPlacedOrder(order);
+      setCart([]);
+      setIsCartOpen(false);
+
+      // Clear only after successful confirmation.
+      idempotencyKeyRef.current = null;
+    } catch (err) {
+      console.error("Guest order placement failed:", err);
+
+      if (!err.response) {
+        setOrderError(
+          "We couldn't confirm your order because the connection was interrupted. Please try again. Your previous request will be checked to prevent duplicate orders."
+        );
+      } else {
+        setOrderError(
+          err.response.data?.message ||
+            "We couldn't place your order. Please try again."
+        );
+      }
+    } finally {
+      orderSubmissionRef.current = false;
+      setIsPlacingOrder(false);
+    }
+  };
+
+  const filteredCategories = menu?.categories
+    ?.map((category) => ({
+      ...category,
+      menuItems: category.menuItems.filter((item) =>
+        item.name.toLowerCase().includes(searchTerm.trim().toLowerCase())
+      ),
+    }))
+    .filter((category) => category.menuItems.length > 0);
+
+  const scrollToCategory = (categoryId) => {
+    const element = categoryRefs.current[categoryId];
+
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+
+      setIsCategoryOpen(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="guest-state">
@@ -162,6 +287,7 @@ function GuestMenu() {
         <AlertCircle size={40} />
         <h2>Menu unavailable</h2>
         <p>{error || "Unable to load the restaurant menu."}</p>
+
         <button
           className="guest-retry-button"
           onClick={() => window.location.reload()}
@@ -178,14 +304,42 @@ function GuestMenu() {
   return (
     <div className="guest-page">
       <header className="guest-header">
-        <div className="guest-brand-icon">
-          <UtensilsCrossed size={24} />
+        <div className="guest-header-brand">
+          <div className="guest-brand-icon">
+            <UtensilsCrossed size={24} />
+          </div>
+
+          <div>
+            <h1>{restaurant.name}</h1>
+            <p>Welcome! Explore our menu.</p>
+          </div>
         </div>
 
-        <div>
-          <h1>{restaurant.name}</h1>
-          <p>Welcome! Explore our menu.</p>
-        </div>
+        {categories.length > 0 && (
+          <div className="guest-header-search">
+            <div className="guest-search-wrapper">
+              <Search size={19} />
+
+              <input
+                type="text"
+                className="guest-search-input"
+                placeholder="Search dishes..."
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+              />
+
+              {searchTerm && (
+                <button
+                  className="guest-search-clear"
+                  onClick={() => setSearchTerm("")}
+                  aria-label="Clear search"
+                >
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       <section className="guest-table-info">
@@ -222,9 +376,26 @@ function GuestMenu() {
           <div className="guest-empty-menu">
             No menu items are currently available.
           </div>
+        ) : filteredCategories.length === 0 ? (
+          <div className="guest-search-empty">
+            <Search size={30} />
+            <h3>No dishes found</h3>
+            <p>Try searching with a different dish name.</p>
+
+            <button onClick={() => setSearchTerm("")}>
+              Clear search
+            </button>
+          </div>
         ) : (
-          categories.map((category) => (
-            <section className="guest-category" key={category.id}>
+          filteredCategories.map((category) => (
+            <section
+              className="guest-category"
+              key={category.id}
+              ref={(element) => {
+                categoryRefs.current[category.id] = element;
+              }}
+              id={`guest-category-${category.id}`}
+            >
               <div className="guest-category-heading">
                 <h3>{category.name}</h3>
 
@@ -300,7 +471,7 @@ function GuestMenu() {
                                   [item.id]: event.target.value,
                                 }))
                               }
-                              disabled={!table.hasOpenSession}
+                              disabled={!table.hasOpenSession || isPlacingOrder}
                             >
                               <option value="">Choose an option</option>
 
@@ -317,6 +488,7 @@ function GuestMenu() {
                             {selectedVariantQuantity > 0 ? (
                               <div className="guest-inline-quantity">
                                 <button
+                                  disabled={isPlacingOrder}
                                   onClick={() =>
                                     updateQuantity(
                                       `${item.id}-${selectedVariantId}`,
@@ -333,6 +505,7 @@ function GuestMenu() {
                                 </strong>
 
                                 <button
+                                  disabled={isPlacingOrder}
                                   onClick={() => {
                                     const variant = item.variants.find(
                                       (entry) =>
@@ -351,7 +524,8 @@ function GuestMenu() {
                                 className="guest-add-button"
                                 disabled={
                                   !table.hasOpenSession ||
-                                  !selectedVariantId
+                                  !selectedVariantId ||
+                                  isPlacingOrder
                                 }
                                 onClick={() => {
                                   const variant = item.variants.find(
@@ -376,6 +550,7 @@ function GuestMenu() {
                             {itemQuantity > 0 ? (
                               <div className="guest-inline-quantity">
                                 <button
+                                  disabled={isPlacingOrder}
                                   onClick={() =>
                                     updateQuantity(
                                       `${item.id}-default`,
@@ -390,6 +565,7 @@ function GuestMenu() {
                                 <strong>{itemQuantity}</strong>
 
                                 <button
+                                  disabled={isPlacingOrder}
                                   onClick={() => addToCart(item)}
                                   aria-label="Increase quantity"
                                 >
@@ -399,7 +575,9 @@ function GuestMenu() {
                             ) : (
                               <button
                                 className="guest-add-button"
-                                disabled={!table.hasOpenSession}
+                                disabled={
+                                  !table.hasOpenSession || isPlacingOrder
+                                }
                                 onClick={() => addToCart(item)}
                               >
                                 <Plus size={16} />
@@ -418,6 +596,51 @@ function GuestMenu() {
         )}
       </main>
 
+      {categories.length > 0 && !searchTerm.trim() && (
+        <div className="guest-category-navigation">
+          {isCategoryOpen && (
+            <div className="guest-category-popup">
+              <div className="guest-category-popup-header">
+                <strong>Browse Categories</strong>
+
+                <button
+                  onClick={() => setIsCategoryOpen(false)}
+                  aria-label="Close categories"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="guest-category-popup-list">
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => scrollToCategory(category.id)}
+                  >
+                    <span>{category.name}</span>
+                    <ChevronRight size={16} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="guest-category-float-button"
+            onClick={() => setIsCategoryOpen((current) => !current)}
+            aria-label={
+              isCategoryOpen ? "Close categories" : "Browse menu categories"
+            }
+            aria-expanded={isCategoryOpen}
+            title="Browse menu categories"
+          >
+            {isCategoryOpen ? <X size={21} /> : <List size={21} />}
+          </button>
+        </div>
+      )}
+
       {cartCount > 0 && table.hasOpenSession && (
         <button
           className="guest-cart-bar"
@@ -435,7 +658,9 @@ function GuestMenu() {
       {isCartOpen && (
         <div
           className="guest-cart-overlay"
-          onClick={() => setIsCartOpen(false)}
+          onClick={() => {
+            if (!isPlacingOrder) setIsCartOpen(false);
+          }}
         >
           <section
             className="guest-cart-drawer"
@@ -450,6 +675,7 @@ function GuestMenu() {
               <button
                 className="guest-cart-close"
                 onClick={() => setIsCartOpen(false)}
+                disabled={isPlacingOrder}
                 aria-label="Close cart"
               >
                 <X size={22} />
@@ -472,9 +698,8 @@ function GuestMenu() {
                   <div className="guest-cart-line-actions">
                     <div className="guest-quantity-control">
                       <button
-                        onClick={() =>
-                          updateQuantity(entry.key, -1)
-                        }
+                        onClick={() => updateQuantity(entry.key, -1)}
+                        disabled={isPlacingOrder}
                         aria-label="Decrease quantity"
                       >
                         <Minus size={14} />
@@ -483,9 +708,8 @@ function GuestMenu() {
                       <strong>{entry.quantity}</strong>
 
                       <button
-                        onClick={() =>
-                          updateQuantity(entry.key, 1)
-                        }
+                        onClick={() => updateQuantity(entry.key, 1)}
+                        disabled={isPlacingOrder}
                         aria-label="Increase quantity"
                       >
                         <Plus size={14} />
@@ -495,6 +719,7 @@ function GuestMenu() {
                     <button
                       className="guest-remove-item"
                       onClick={() => removeFromCart(entry.key)}
+                      disabled={isPlacingOrder}
                       aria-label="Remove item"
                     >
                       <Trash2 size={16} />
@@ -519,15 +744,69 @@ function GuestMenu() {
                 calculated at checkout.
               </p>
 
+              {orderError && (
+                <div className="guest-order-error">
+                  <AlertCircle size={16} />
+                  <span>{orderError}</span>
+                </div>
+              )}
+
               <button
                 className="guest-checkout-button"
-                disabled
-                title="Order placement will be enabled in the next step"
+                disabled={isPlacingOrder || cart.length === 0}
+                onClick={handlePlaceOrder}
               >
-                Continue to Order — Coming Next
+                {isPlacingOrder
+                  ? "Placing Order..."
+                  : `Place Order · ${formatPrice(cartTotal)}`}
               </button>
             </div>
           </section>
+        </div>
+      )}
+
+      {placedOrder && (
+        <div className="guest-order-success-overlay">
+          <div className="guest-order-success">
+            <CheckCircle2 size={54} />
+
+            <h2>Order Placed Successfully!</h2>
+
+            <p>Your order has been sent to the kitchen.</p>
+
+            <div className="guest-order-success-details">
+              <div>
+                <span>Order ID</span>
+                <strong>
+                  {placedOrder.id?.slice(0, 8).toUpperCase()}
+                </strong>
+              </div>
+
+              <div>
+                <span>Table</span>
+                <strong>
+                  {placedOrder.table?.tableNumber ?? table.tableNumber}
+                </strong>
+              </div>
+
+              <div>
+                <span>Status</span>
+                <strong>{placedOrder.status}</strong>
+              </div>
+
+              <div>
+                <span>Total</span>
+                <strong>{formatPrice(placedOrder.totalAmount)}</strong>
+              </div>
+            </div>
+
+            <button
+              className="guest-checkout-button"
+              onClick={() => setPlacedOrder(null)}
+            >
+              Back to Menu
+            </button>
+          </div>
         </div>
       )}
 

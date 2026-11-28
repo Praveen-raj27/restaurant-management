@@ -386,3 +386,31 @@
     padding: 15px;
   }
 }
+.kitchen-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.kitchen-connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.kitchen-connection-status.connected {
+  color: #26966b;
+}
+
+.kitchen-connection-status.disconnected {
+  color: #c58b43;
+}
+
+@media (max-width: 600px) {
+  .kitchen-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

@@ -761,3 +761,49 @@
     font-size: 9px;
   }
 }
+
+
+.refresh-orders-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border, #34445b);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-secondary, #aab4c3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-orders-button:hover {
+  color: var(--color-copper, #e9b96e);
+  border-color: var(--color-copper, #e9b96e);
+}
+
+.refresh-orders-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.orders-message {
+  padding: 24px 12px;
+  text-align: center;
+  color: var(--color-text-secondary, #aab4c3);
+  font-size: 13px;
+}
+
+.orders-error button {
+  margin-top: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-copper, #e9b96e);
+  cursor: pointer;
+}
+
+.order-status.cancelled {
+  color: #ef8585;
+  background: rgba(239, 133, 133, 0.12);
+}
+

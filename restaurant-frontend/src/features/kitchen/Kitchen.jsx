@@ -1,5 +1,7 @@
 
 import { useCallback, useEffect, useState } from "react";
+import { useSelector } from "react-redux";
+
 import {
   RefreshCw,
   Clock,
@@ -7,19 +9,26 @@ import {
   CheckCircle2,
   AlertCircle,
   LoaderCircle,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
+
+import { getRestaurantSocket } from "../../services/socket";
 
 import kitchenService from "./kitchenService";
 import "./Kitchen.css";
 
-const REFRESH_INTERVAL = 15000;
-
 function Kitchen() {
+  const accessToken = useSelector(
+    (state) => state.auth.accessToken
+  );
+
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [error, setError] = useState("");
+  const [socketConnected, setSocketConnected] = useState(false);
 
   const fetchOrders = useCallback(async (showLoader = false) => {
     try {
@@ -34,7 +43,7 @@ function Kitchen() {
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        "Unable to retrieve kitchen orders.",
+          "Unable to retrieve kitchen orders."
       );
     } finally {
       setLoading(false);
@@ -42,28 +51,109 @@ function Kitchen() {
     }
   }, []);
 
+  // Shared Socket.IO connection
   useEffect(() => {
-    fetchOrders();
+    if (!accessToken) {
+      setLoading(false);
+      setSocketConnected(false);
+      return;
+    }
 
-    const interval = setInterval(() => {
+    const socket = getRestaurantSocket(accessToken);
+
+    if (!socket) return;
+
+    const handleConnect = () => {
+      console.log("Kitchen socket connected");
+
+      setSocketConnected(true);
+
+      // Recover orders missed while disconnected.
       fetchOrders();
-    }, REFRESH_INTERVAL);
+    };
 
-    return () => clearInterval(interval);
-  }, [fetchOrders]);
+    const handleDisconnect = () => {
+      console.log("Kitchen socket disconnected");
+      setSocketConnected(false);
+    };
+
+    const handleConnectError = (err) => {
+      console.error(
+        "Kitchen socket connection error:",
+        err.message
+      );
+
+      setSocketConnected(false);
+    };
+
+    const handleNewOrder = (newOrder) => {
+      console.log("New kitchen order received:", newOrder);
+
+      setOrders((currentOrders) => {
+        const alreadyExists = currentOrders.some(
+          (order) => order.id === newOrder.id
+        );
+
+        if (alreadyExists) {
+          return currentOrders;
+        }
+
+        return [newOrder, ...currentOrders];
+      });
+
+      setError("");
+    };
+
+    const handleOrderUpdated = (updatedOrder) => {
+      setOrders((currentOrders) =>
+        currentOrders.map((order) =>
+          order.id === updatedOrder.id
+            ? updatedOrder
+            : order
+        )
+      );
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
+
+    socket.on("order:new", handleNewOrder);
+    socket.on("order:updated", handleOrderUpdated);
+
+    // If the shared socket is already connected,
+    // handle the current connection immediately.
+    if (socket.connected) {
+      handleConnect();
+    }
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
+
+      socket.off("order:new", handleNewOrder);
+      socket.off("order:updated", handleOrderUpdated);
+
+      // Do not disconnect the shared socket here.
+    };
+  }, [accessToken, fetchOrders]);
 
   const handleStatusUpdate = async (orderId, status) => {
     try {
       setUpdatingId(orderId);
       setError("");
 
-      await kitchenService.updateKitchenOrderStatus(orderId, status);
+      await kitchenService.updateKitchenOrderStatus(
+        orderId,
+        status
+      );
 
       await fetchOrders();
     } catch (err) {
       setError(
         err.response?.data?.message ||
-        "Unable to update order status.",
+          "Unable to update order status."
       );
     } finally {
       setUpdatingId(null);
@@ -100,22 +190,24 @@ function Kitchen() {
   const getElapsedTime = (date) => {
     const minutes = Math.max(
       0,
-      Math.floor((Date.now() - new Date(date).getTime()) / 60000),
+      Math.floor(
+        (Date.now() - new Date(date).getTime()) / 60000
+      )
     );
 
     return `${minutes} min ago`;
   };
 
   const placedCount = orders.filter(
-    (order) => order.status === "PLACED",
+    (order) => order.status === "PLACED"
   ).length;
 
   const preparingCount = orders.filter(
-    (order) => order.status === "PREPARING",
+    (order) => order.status === "PREPARING"
   ).length;
 
   const readyCount = orders.filter(
-    (order) => order.status === "READY",
+    (order) => order.status === "READY"
   ).length;
 
   if (loading) {
@@ -135,17 +227,35 @@ function Kitchen() {
           <p>Manage incoming orders and preparation status.</p>
         </div>
 
-        <button
-          className="kitchen-refresh-button"
-          onClick={() => fetchOrders(true)}
-          disabled={refreshing}
-        >
-          <RefreshCw
-            size={16}
-            className={refreshing ? "spin" : ""}
-          />
-          Refresh
-        </button>
+        <div className="kitchen-header-actions">
+          <div
+            className={`kitchen-connection-status ${
+              socketConnected ? "connected" : "disconnected"
+            }`}
+          >
+            {socketConnected ? (
+              <Wifi size={16} />
+            ) : (
+              <WifiOff size={16} />
+            )}
+
+            <span>
+              {socketConnected ? "Live" : "Reconnecting..."}
+            </span>
+          </div>
+
+          <button
+            className="kitchen-refresh-button"
+            onClick={() => fetchOrders(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              size={16}
+              className={refreshing ? "spin" : ""}
+            />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="kitchen-summary">
@@ -194,7 +304,9 @@ function Kitchen() {
                     <span className="kitchen-order-label">
                       ORDER
                     </span>
-                    <h3>#{order.id.slice(0, 8).toUpperCase()}</h3>
+                    <h3>
+                      #{order.id.slice(0, 8).toUpperCase()}
+                    </h3>
                   </div>
 
                   <span
@@ -219,7 +331,9 @@ function Kitchen() {
 
                   <div>
                     <span>Waiting</span>
-                    <strong>{getElapsedTime(order.placedAt)}</strong>
+                    <strong>
+                      {getElapsedTime(order.placedAt)}
+                    </strong>
                   </div>
                 </div>
 
@@ -227,7 +341,10 @@ function Kitchen() {
                   <h4>Order Items</h4>
 
                   {order.items.map((item) => (
-                    <div className="kitchen-order-item" key={item.id}>
+                    <div
+                      className="kitchen-order-item"
+                      key={item.id}
+                    >
                       <div className="kitchen-item-info">
                         <strong>{item.itemName}</strong>
 
@@ -258,12 +375,18 @@ function Kitchen() {
                   <button
                     className={`kitchen-action-button action-${action.nextStatus.toLowerCase()}`}
                     onClick={() =>
-                      handleStatusUpdate(order.id, action.nextStatus)
+                      handleStatusUpdate(
+                        order.id,
+                        action.nextStatus
+                      )
                     }
                     disabled={updatingId === order.id}
                   >
                     {updatingId === order.id ? (
-                      <LoaderCircle className="spin" size={17} />
+                      <LoaderCircle
+                        className="spin"
+                        size={17}
+                      />
                     ) : (
                       <ActionIcon size={17} />
                     )}
@@ -283,7 +406,7 @@ function Kitchen() {
 
                 <div className="kitchen-order-footer">
                   <Clock size={14} />
-                  <span>Updated automatically every 15 seconds</span>
+                  <span>Real-time order updates enabled</span>
                 </div>
               </article>
             );

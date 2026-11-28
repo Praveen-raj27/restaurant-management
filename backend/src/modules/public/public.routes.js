@@ -3,8 +3,9 @@ import { Router } from "express";
 import {
   validateQrCode,
   getPublicMenu,
+  createGuestOrder
 } from "./public.controller.js";
-import { validateQrRequest } from "./public.validation.js";
+import { validateQrRequest, validatePlaceOrderRequest } from "./public.validation.js";
 
 const router = Router();
 
@@ -20,6 +21,13 @@ router.post(
   "/tables/menu",
   validateQrRequest,
   getPublicMenu
+);
+
+// Guest order placement
+router.post(
+  "/orders",
+  validatePlaceOrderRequest,
+  createGuestOrder
 );
 
 export default router;

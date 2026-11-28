@@ -1,5 +1,6 @@
 
 import prisma from "../../config/prisma.js";
+import { getIO } from "../../config/socket.js";
 
 export const getKitchenOrders = async ({ restaurantId }) => {
   const orders = await prisma.order.findMany({
@@ -39,12 +40,14 @@ export const getKitchenOrders = async ({ restaurantId }) => {
 };
 
 
+
 export const updateKitchenOrderStatus = async ({
   restaurantId,
   orderId,
   status,
 }) => {
-  return prisma.$transaction(async (tx) => {
+  // Update order inside the transaction.
+  const updatedOrder = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findFirst({
       where: {
         id: orderId,
@@ -108,4 +111,15 @@ export const updateKitchenOrderStatus = async ({
       },
     });
   });
+
+  // Broadcast only after successful transaction commit.
+  try {
+    getIO()
+      .to(`restaurant:${restaurantId}`)
+      .emit("order:updated", updatedOrder);
+  } catch (error) {
+    console.error("Failed to emit order update:", error);
+  }
+
+  return updatedOrder;
 };
